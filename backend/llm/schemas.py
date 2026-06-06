@@ -141,3 +141,23 @@ class ExplainRequest(BaseModel):
 
 class ExplainResponse(BaseModel):
     prose: str
+
+
+# ---------------------------------------------------------------------------
+# /api/chat  (conversational assistant — streaming)
+# ---------------------------------------------------------------------------
+
+class ChatMessage(BaseModel):
+    """One turn of conversation history. Content is plain text."""
+    role: Literal["user", "assistant"]
+    content: str = Field(..., min_length=1, max_length=8000)
+
+
+class ChatRequest(BaseModel):
+    """
+    Full conversation history (oldest first); the last message must be the
+    user's new turn. The frontend persists only assistant *text*, so history
+    never contains dangling tool_use blocks.
+    """
+    messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
+    locale: Locale = "en"

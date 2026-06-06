@@ -43,6 +43,10 @@ import {
   buildSyntheticScenario, buildPlanSummaryPayload,
   parseGoal, summarizePlan, BASE_WEIGHTS,
 } from './lib/llm'
+import type { MapCommand } from './lib/chat'
+import {
+  type DynamicLayer, validateAddLayer, describeLayer, rampCssGradient,
+} from './lib/dynamicLayers'
 
 import ScenarioPanel from './components/ScenarioPanel'
 import ChatPanel, { type PlannerMessage } from './components/ChatPanel'
@@ -86,6 +90,17 @@ const DEFAULT_LAYERS: AppLayer[] = [
     opacity: 1.0,
     capabilities: { download: true, style: true },
     swatch: 'districts',
+    level: 'district',
+  },
+  {
+    id: 'neighbourhoods',
+    label_key: 'layer.neighbourhoods',
+    subtitle_key: 'layer.neighbourhoods.subtitle',
+    visible: true,
+    opacity: 1.0,
+    capabilities: { download: true, style: false },
+    swatch: 'neighbourhoods',
+    level: 'neighbourhood',
   },
   {
     id: 'basemap',
@@ -101,8 +116,45 @@ const DEFAULT_LAYERS: AppLayer[] = [
 // ── Right panel tabs ─────────────────────────────────────────────────────────
 type RightTab = 'detail' | 'style'
 
+// Loose name normaliser — must match MapView.normName so assistant-supplied
+// names (districts or coded STPU names like "Kwun Tong · 294") resolve to cells.
+function normCellName(s: string): string {
+  return s
+    .trim()
+    .toLowerCase()
+    .replace(/&/g, 'and')
+    .replace(/[-·]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim()
+}
+
 // Suppress unused import — BASE_WEIGHTS is referenced transitively via llm helpers
 void BASE_WEIGHTS
+
+// Heat-ramp preview for the dynamic-layer swatch in the Layers panel.
+const HEAT_SWATCH = 'linear-gradient(90deg, #0070f3, #50e3c2, #f5a623, #ff0080, #ee0000)'
+
+/** Project an agent-created DynamicLayer into the Layers-panel row model. */
+function dynamicToAppLayer(d: DynamicLayer): AppLayer {
+  const swatchStyle =
+    d.type === 'bubble'  ? d.color :
+    d.type === 'heatmap' ? HEAT_SWATCH :
+    rampCssGradient()
+  return {
+    id: d.id,
+    label_key: '',
+    subtitle_key: '',
+    label: d.label,
+    subtitle: describeLayer(d),
+    visible: d.visible,
+    opacity: d.opacity,
+    capabilities: { download: false, style: false, remove: true },
+    swatch: 'dynamic',
+    swatchStyle,
+    // No `level`: dynamic overlays render in their own pane at every zoom, so
+    // they are never greyed by the district↔neighbourhood active level.
+  }
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // Inner app
@@ -141,6 +193,12 @@ function AppInner() {
   const [layers,        setLayers]        = useState<AppLayer[]>(DEFAULT_LAYERS)
   const [styleLayerId,  setStyleLayerId]  = useState<string>('districts')
   const [paletteMode,   setPaletteMode]   = useState<PaletteMode>('land')
+  // Agent-created analytical overlays (heatmap / choropleth / bubble).
+  const [dynamicLayers, setDynamicLayers] = useState<DynamicLayer[]>([])
+  const dynIdRef = useRef(0)
+  // Which granularity the map is currently showing (zoom-driven). Drives the
+  // Layers sidebar's active/greyed state.
+  const [activeLevel,   setActiveLevel]   = useState<'district' | 'neighbourhood'>('district')
 
   // ── Map imperative handle ────────────────────────────────────────────────────
   const mapApi = useRef<MapApi | null>(null)
@@ -273,17 +331,84 @@ function AppInner() {
   }, [])
 
   // ── Layer mutation helpers ───────────────────────────────────────────────────
+  // Agent-created layers carry a `dyn-` id prefix and live in their own state.
+  const isDynId = (id: string) => id.startsWith('dyn-')
+
   const setLayerVisible = useCallback((id: string, visible: boolean) => {
-    setLayers(prev => prev.map(l => (l.id === id ? { ...l, visible } : l)))
+    if (isDynId(id)) {
+      setDynamicLayers(prev => prev.map(l => (l.id === id ? { ...l, visible } : l)))
+    } else {
+      setLayers(prev => prev.map(l => (l.id === id ? { ...l, visible } : l)))
+    }
   }, [])
 
   const setLayerOpacity = useCallback((id: string, opacity: number) => {
-    setLayers(prev => prev.map(l => (l.id === id ? { ...l, opacity } : l)))
+    if (isDynId(id)) {
+      setDynamicLayers(prev => prev.map(l => (l.id === id ? { ...l, opacity } : l)))
+    } else {
+      setLayers(prev => prev.map(l => (l.id === id ? { ...l, opacity } : l)))
+    }
+  }, [])
+
+  const deleteLayer = useCallback((id: string) => {
+    if (isDynId(id)) setDynamicLayers(prev => prev.filter(l => l.id !== id))
   }, [])
 
   const zoomToLayer = useCallback((id: string) => {
+    // Dynamic overlays don't have their own camera target — frame the data at
+    // the granularity they were built for.
+    const dyn = dynamicLayers.find(l => l.id === id)
+    if (dyn) {
+      mapApi.current?.zoomToLayer(dyn.granularity === 'neighbourhood' ? 'neighbourhoods' : 'districts')
+      return
+    }
     mapApi.current?.zoomToLayer(id)
-  }, [])
+  }, [dynamicLayers])
+
+  // ── Assistant-driven map control (highlight / zoom) ──────────────────────────
+  const handleMapCommand = useCallback((cmd: MapCommand) => {
+    const api = mapApi.current
+    if (!api) return
+    if (cmd.name === 'highlight_map') {
+      const names = cmd.input.districts ?? []
+      api.highlightDistricts(names, cmd.input.color)
+      // Surface the primary highlighted cell's profile in the right sidebar,
+      // so a tool-driven highlight reads like a selection. Resolve against both
+      // the 18 districts and the 211 STPU neighbourhoods.
+      if (names.length > 0) {
+        const target = normCellName(names[0])
+        const cell =
+          districts.find(d => normCellName(d.name) === target) ??
+          nbhds.find(d => normCellName(d.name) === target) ??
+          null
+        if (cell) {
+          setSelectedDistrict(cell)
+          setRightTab('detail')
+          setRightOpen(true)
+        }
+      }
+    } else if (cmd.name === 'zoom_to') {
+      api.zoomToDistrict(cmd.input.district)
+    } else if (cmd.name === 'add_layer') {
+      const id = `dyn-${++dynIdRef.current}`
+      const { layer } = validateAddLayer(cmd.input, id, nbhdGeojson != null)
+      if (layer) {
+        setDynamicLayers(prev => [...prev, layer])
+        setLayersOpen(true)   // reveal the stack so the new layer is visible
+      }
+    } else if (cmd.name === 'remove_layer') {
+      const { id, label, all } = cmd.input
+      setDynamicLayers(prev => {
+        if (all) return []
+        if (id) return prev.filter(l => l.id !== id)
+        if (label) {
+          const target = label.trim().toLowerCase()
+          return prev.filter(l => l.label.trim().toLowerCase() !== target)
+        }
+        return []   // no selector → clear all
+      })
+    }
+  }, [districts, nbhds, nbhdGeojson])
 
   const openStyleForLayer = useCallback((id: string) => {
     setStyleLayerId(id)
@@ -292,15 +417,20 @@ function AppInner() {
   }, [])
 
   const downloadLayer = useCallback((id: string) => {
-    if (id !== 'districts' || !geojson) return
-    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/geo+json' })
+    const source =
+      id === 'districts' ? geojson :
+      id === 'neighbourhoods' ? nbhdGeojson :
+      null
+    if (!source) return
+    const fname = id === 'neighbourhoods' ? 'hk-neighbourhoods.geojson' : 'hk-districts.geojson'
+    const blob = new Blob([JSON.stringify(source, null, 2)], { type: 'application/geo+json' })
     const url = URL.createObjectURL(blob)
     const a = document.createElement('a')
     a.href = url
-    a.download = 'hk-districts.geojson'
+    a.download = fname
     a.click()
     URL.revokeObjectURL(url)
-  }, [geojson])
+  }, [geojson, nbhdGeojson])
 
   const resetStyling = useCallback(() => {
     setLayers(prev => prev.map(l => {
@@ -318,8 +448,15 @@ function AppInner() {
   }, [])
 
   // ── Resolve current layer state for MapView ──────────────────────────────────
-  const districtsLayer = layers.find(l => l.id === 'districts')!
-  const basemapLayer   = layers.find(l => l.id === 'basemap')!
+  const districtsLayer     = layers.find(l => l.id === 'districts')!
+  const neighbourhoodLayer = layers.find(l => l.id === 'neighbourhoods')!
+  const basemapLayer       = layers.find(l => l.id === 'basemap')!
+
+  // Base layers + agent-created overlays, for the Layers panel stack.
+  const panelLayers = useMemo<AppLayer[]>(
+    () => [...layers, ...dynamicLayers.map(dynamicToAppLayer)],
+    [layers, dynamicLayers],
+  )
 
   // ── Error state ───────────────────────────────────────────────────────────────
   if (loadError) {
@@ -383,17 +520,20 @@ function AppInner() {
           onToggle={() => setChatOpen(o => !o)}
           onGoal={handleGoal}
           plannerMessage={plannerMessage}
+          onMapCommand={handleMapCommand}
         />
 
         {/* Left: layers panel */}
         <LayersPanel
           open={layersOpen}
           onToggle={() => setLayersOpen(o => !o)}
-          layers={layers}
+          layers={panelLayers}
+          activeLevel={activeLevel}
           onSetVisible={setLayerVisible}
           onZoomTo={zoomToLayer}
           onOpenStyle={openStyleForLayer}
           onDownload={downloadLayer}
+          onDelete={deleteLayer}
         />
 
         {/* Map area */}
@@ -413,9 +553,12 @@ function AppInner() {
             basemapOpacity={basemapLayer.opacity}
             paletteMode={paletteMode}
             apiRef={mapApi}
+            onActiveLevelChange={setActiveLevel}
+            nbhdVisible={neighbourhoodLayer.visible}
             nbhdGeojson={nbhdGeojson}
             nbhdScorer={nbhdScorer}
             nbhdAllocationResult={nbhdAllocationResult}
+            dynamicLayers={dynamicLayers}
           />
           <MapLegend
             activeScenario={activeScenario}

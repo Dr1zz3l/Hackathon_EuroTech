@@ -41,16 +41,30 @@ export interface AppLayer {
   label_key: string
   /** i18n key for the subtitle (file format / source / etc.) */
   subtitle_key: string
+  /** Raw display name — overrides label_key (agent-created layers). */
+  label?: string
+  /** Raw subtitle — overrides subtitle_key (agent-created layers). */
+  subtitle?: string
   visible: boolean
   /** 0–1 alpha multiplier on the layer's natural fill */
   opacity: number
-  /** Whether download / styling actions apply to this layer */
+  /** Whether download / styling / remove actions apply to this layer */
   capabilities: {
     download: boolean
     style: boolean
+    /** Agent-created layers can be deleted from the stack. */
+    remove?: boolean
   }
   /** A small swatch preview rendered in the row */
-  swatch: 'districts' | 'basemap'
+  swatch: 'districts' | 'basemap' | 'neighbourhoods' | 'dynamic'
+  /** For swatch:'dynamic' — CSS background (ramp gradient or solid colour). */
+  swatchStyle?: string
+  /**
+   * Zoom-driven granularity this layer represents. When set, the layer is
+   * "active" only while the map is showing that level — otherwise it's greyed.
+   * Layers without a level (e.g. the basemap) are always active.
+   */
+  level?: 'district' | 'neighbourhood'
 }
 
 // ─── Props ─────────────────────────────────────────────────────────────────
@@ -58,14 +72,18 @@ interface LayersPanelProps {
   open: boolean
   onToggle: () => void
   layers: AppLayer[]
+  /** The granularity currently rendered on the map (drives greying). */
+  activeLevel: 'district' | 'neighbourhood'
   onSetVisible: (id: string, visible: boolean) => void
   onZoomTo: (id: string) => void
   onOpenStyle: (id: string) => void
   onDownload: (id: string) => void
+  /** Remove an agent-created layer (only called for layers with remove capability). */
+  onDelete?: (id: string) => void
 }
 
 // ─── Swatch preview — shows the layer's palette at a glance ────────────────
-function LayerSwatch({ kind, visible }: { kind: AppLayer['swatch']; visible: boolean }) {
+function LayerSwatch({ kind, visible, style }: { kind: AppLayer['swatch']; visible: boolean; style?: string }) {
   const opacity = visible ? 1 : 0.4
   if (kind === 'districts') {
     return (
@@ -76,6 +94,27 @@ function LayerSwatch({ kind, visible }: { kind: AppLayer['swatch']; visible: boo
             'linear-gradient(135deg, #50e3c2 0%, #0070f3 40%, #ff0080 70%, #f5a623 100%)',
           opacity,
         }}
+      />
+    )
+  }
+  if (kind === 'neighbourhoods') {
+    // Conic multi-wedge reads as "many small cells" — the finer STPU mesh.
+    return (
+      <span
+        className="inline-block w-4 h-4 rounded-md shadow-hairline-inset shrink-0"
+        style={{
+          background:
+            'conic-gradient(#50e3c2 0 25%, #0070f3 0 50%, #ff0080 0 75%, #f5a623 0)',
+          opacity,
+        }}
+      />
+    )
+  }
+  if (kind === 'dynamic') {
+    return (
+      <span
+        className="inline-block w-4 h-4 rounded-md shadow-hairline-inset shrink-0"
+        style={{ background: style || '#0070f3', opacity }}
       />
     )
   }
@@ -93,11 +132,13 @@ function KebabMenu({
   onClose,
   onOpenStyle,
   onDownload,
+  onDelete,
 }: {
   layer: AppLayer
   onClose: () => void
   onOpenStyle: (id: string) => void
   onDownload: (id: string) => void
+  onDelete?: (id: string) => void
 }) {
   const { t } = useI18n()
   const ref = useRef<HTMLDivElement>(null)
@@ -174,8 +215,12 @@ function KebabMenu({
       key: 'delete',
       label: t('sidebar.layers.menu.delete'),
       icon: <TrashIcon size={14} />,
-      enabled: false,
+      enabled: !!layer.capabilities.remove && !!onDelete,
       danger: true,
+      onSelect: () => {
+        onDelete?.(layer.id)
+        onClose()
+      },
     },
   ]
 
@@ -220,17 +265,31 @@ function KebabMenu({
 // ─── Layer row ─────────────────────────────────────────────────────────────
 function LayerRow({
   layer,
+  activeLevel,
   onSetVisible,
   onZoomTo,
   onOpenStyle,
   onDownload,
+  onDelete,
 }: {
   layer: AppLayer
-} & Pick<LayersPanelProps, 'onSetVisible' | 'onZoomTo' | 'onOpenStyle' | 'onDownload'>) {
+  activeLevel: LayersPanelProps['activeLevel']
+} & Pick<LayersPanelProps, 'onSetVisible' | 'onZoomTo' | 'onOpenStyle' | 'onDownload' | 'onDelete'>) {
   const { t } = useI18n()
   const [menuOpen, setMenuOpen] = useState(false)
 
   const hidden = !layer.visible
+  // Zoom-inactive: this layer represents a granularity the map isn't showing.
+  const inactive = !!layer.level && layer.level !== activeLevel
+  const dimmed = hidden || inactive
+
+  const name = layer.label ?? t(layer.label_key)
+  // When inactive, the subtitle becomes a hint telling the user how to reveal it.
+  const subtitle = inactive
+    ? (layer.level === 'neighbourhood'
+        ? t('sidebar.layers.hint.zoom_in')
+        : t('sidebar.layers.hint.zoom_out'))
+    : (layer.subtitle ?? t(layer.subtitle_key))
 
   return (
     <div
@@ -238,17 +297,17 @@ function LayerRow({
         group relative
         flex items-center gap-2 px-2 py-2 rounded-md
         hover:bg-canvas-soft transition-colors
-        ${hidden ? 'opacity-50' : ''}
+        ${dimmed ? 'opacity-50' : ''}
       `}
     >
-      <LayerSwatch kind={layer.swatch} visible={layer.visible} />
+      <LayerSwatch kind={layer.swatch} visible={layer.visible && !inactive} style={layer.swatchStyle} />
 
       <div className="flex-1 min-w-0">
-        <div className={`text-[13px] font-medium tracking-body-sm truncate ${hidden ? 'line-through decoration-mute/40' : 'text-ink'}`}>
-          {t(layer.label_key)}
+        <div className={`text-[13px] font-medium tracking-body-sm truncate ${hidden ? 'line-through decoration-mute/40 text-mute' : 'text-ink'}`}>
+          {name}
         </div>
-        <div className="eyebrow text-[9px] truncate">
-          {t(layer.subtitle_key)}
+        <div className={`eyebrow text-[9px] truncate ${inactive ? 'text-link-deep' : ''}`}>
+          {subtitle}
         </div>
       </div>
 
@@ -321,6 +380,7 @@ function LayerRow({
           onClose={() => setMenuOpen(false)}
           onOpenStyle={onOpenStyle}
           onDownload={onDownload}
+          onDelete={onDelete}
         />
       )}
     </div>
@@ -332,10 +392,12 @@ export default function LayersPanel({
   open,
   onToggle,
   layers,
+  activeLevel,
   onSetVisible,
   onZoomTo,
   onOpenStyle,
   onDownload,
+  onDelete,
 }: LayersPanelProps) {
   const { t } = useI18n()
 
@@ -419,10 +481,12 @@ export default function LayersPanel({
           <LayerRow
             key={layer.id}
             layer={layer}
+            activeLevel={activeLevel}
             onSetVisible={onSetVisible}
             onZoomTo={onZoomTo}
             onOpenStyle={onOpenStyle}
             onDownload={onDownload}
+            onDelete={onDelete}
           />
         ))}
       </div>

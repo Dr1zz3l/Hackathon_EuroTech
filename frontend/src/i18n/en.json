@@ -72,6 +72,20 @@
   "sidebar.chat.placeholder": "Describe a planning goal…",
   "sidebar.chat.expand": "Open chat",
   "sidebar.chat.collapse": "Collapse chat",
+  "sidebar.chat.tab.assistant": "Assistant",
+  "sidebar.chat.tab.planner": "Planner",
+
+  "assistant.empty": "Ask about the map.",
+  "assistant.empty_sub": "I can answer questions about the 18 districts and highlight them on the map.",
+  "assistant.placeholder": "Ask anything about the districts…",
+  "assistant.send": "Send",
+  "assistant.thinking": "Thinking…",
+  "assistant.error.auth": "AI assistant not configured — add ANTHROPIC_API_KEY to the backend.",
+  "assistant.error.generic": "Couldn't reach the AI assistant. Is the backend running?",
+  "assistant.suggest.oldest": "Which district has the oldest population?",
+  "assistant.suggest.greenest": "Where is there the most green space?",
+  "assistant.suggest.densest": "Show me the most densely populated districts.",
+  "assistant.suggest.heatmap": "Add a heatmap of the most densely populated areas.",
 
   "sidebar.layers.title": "Layers",
   "sidebar.layers.expand": "Open layers",
@@ -92,8 +106,13 @@
 
   "layer.districts": "Hong Kong districts",
   "layer.districts.subtitle": "18 features · GeoJSON",
+  "layer.neighbourhoods": "Neighbourhoods (STPU)",
+  "layer.neighbourhoods.subtitle": "211 features · STPU",
   "layer.basemap": "Base map",
   "layer.basemap.subtitle": "Carto · Positron",
+
+  "sidebar.layers.hint.zoom_in": "Zoom in to activate",
+  "sidebar.layers.hint.zoom_out": "Zoom out to activate",
 
   "panel.right.tab.detail": "District",
   "panel.right.tab.style": "Style",

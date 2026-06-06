@@ -8,6 +8,7 @@ in app.py). Never logs or echoes the key.
 import anthropic
 
 _client: anthropic.Anthropic | None = None
+_async_client: anthropic.AsyncAnthropic | None = None
 
 
 def get_client() -> anthropic.Anthropic:
@@ -18,3 +19,11 @@ def get_client() -> anthropic.Anthropic:
         # Raises AuthenticationError at call-time if the key is missing/invalid.
         _client = anthropic.Anthropic()
     return _client
+
+
+def get_async_client() -> anthropic.AsyncAnthropic:
+    """Return the module-level async client (used by the streaming chat endpoint)."""
+    global _async_client
+    if _async_client is None:
+        _async_client = anthropic.AsyncAnthropic()
+    return _async_client

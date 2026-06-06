@@ -38,7 +38,10 @@ export default function StylingPanel({
   onReset,
 }: StylingPanelProps) {
   const { t } = useI18n()
-  const active = layers.find(l => l.id === activeLayerId) ?? layers[0]
+  // Only layers that declare a style capability are configurable here.
+  const styleable = layers.filter(l => l.capabilities.style)
+  const active =
+    styleable.find(l => l.id === activeLayerId) ?? styleable[0] ?? layers[0]
   const opacityPct = Math.round(active.opacity * 100)
 
   return (
@@ -48,7 +51,7 @@ export default function StylingPanel({
       <section>
         <p className="eyebrow mb-2.5">{t('styling.layer')}</p>
         <div className="flex flex-col gap-1">
-          {layers.map(l => {
+          {styleable.map(l => {
             const isActive = l.id === active.id
             return (
               <button

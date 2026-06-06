@@ -72,6 +72,20 @@
   "sidebar.chat.placeholder": "輸入規劃目標…",
   "sidebar.chat.expand": "開啟對話",
   "sidebar.chat.collapse": "收起對話",
+  "sidebar.chat.tab.assistant": "助手",
+  "sidebar.chat.tab.planner": "規劃師",
+
+  "assistant.empty": "詢問關於地圖的問題。",
+  "assistant.empty_sub": "我可以回答關於 18 區的問題，並在地圖上標示它們。",
+  "assistant.placeholder": "詢問任何關於各區的問題…",
+  "assistant.send": "傳送",
+  "assistant.thinking": "思考中…",
+  "assistant.error.auth": "AI 助手尚未設定 — 請在後端加入 ANTHROPIC_API_KEY。",
+  "assistant.error.generic": "無法連接 AI 助手。後端是否已啟動？",
+  "assistant.suggest.oldest": "哪一區的人口最年長？",
+  "assistant.suggest.greenest": "哪裡有最多綠化／開放空間？",
+  "assistant.suggest.densest": "顯示人口密度最高的地區。",
+  "assistant.suggest.heatmap": "加入人口最稠密地區的熱力圖。",
 
   "sidebar.layers.title": "圖層",
   "sidebar.layers.expand": "開啟圖層",
@@ -92,8 +106,13 @@
 
   "layer.districts": "香港各區",
   "layer.districts.subtitle": "18 個分區 · GeoJSON",
+  "layer.neighbourhoods": "鄰里單元 (STPU)",
+  "layer.neighbourhoods.subtitle": "211 個單元 · STPU",
   "layer.basemap": "底圖",
   "layer.basemap.subtitle": "Carto · Positron",
+
+  "sidebar.layers.hint.zoom_in": "放大以啟用",
+  "sidebar.layers.hint.zoom_out": "縮小以啟用",
 
   "panel.right.tab.detail": "分區",
   "panel.right.tab.style": "樣式",

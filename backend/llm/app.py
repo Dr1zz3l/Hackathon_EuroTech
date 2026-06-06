@@ -23,6 +23,7 @@ from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
+from .chat import router as chat_router
 from .client import get_client
 from .prompts import (
     EXPLAIN_SYSTEM, PARSE_SYSTEM, PARSE_TOOL, SUMMARIZE_SYSTEM,
@@ -35,8 +36,10 @@ from .schemas import (
     WeightOverrides,
 )
 
-# Load .env on startup (no-op if already set via real environment)
-load_dotenv()
+# Load .env on startup. override=True so the .env file wins even when the
+# shell injects an empty ANTHROPIC_API_KEY (common under `uv run`) — without
+# it, load_dotenv would keep the empty ambient value and auth would fail.
+load_dotenv(override=True)
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +59,9 @@ app.add_middleware(
 )
 
 MODEL = "claude-haiku-4-5"
+
+# Conversational assistant (streaming /api/chat) — see backend/llm/chat.py
+app.include_router(chat_router)
 
 
 # ---------------------------------------------------------------------------
