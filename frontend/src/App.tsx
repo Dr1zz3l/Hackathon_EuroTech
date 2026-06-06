@@ -19,7 +19,7 @@ import { SCENARIOS } from './scenarios'
 import type { AdjacencyMap, AllocationResult, Allocator, District, Scenario, ScoreResult, Scorer } from './types'
 import {
   buildSyntheticScenario, buildPlanSummaryPayload,
-  parseGoal, summarizePlan,
+  parseGoal, summarizePlan, BASE_WEIGHTS,
 } from './lib/llm'
 
 import MapView from './components/MapView'
@@ -65,6 +65,10 @@ function AppInner() {
     rationale: string
     prose: string | null
     loading: boolean
+    /** Merged WeightSet that Haiku produced — used for the weight breakdown display. */
+    weights: import('./types').WeightSet | null
+    /** Keys that Haiku explicitly overrode (vs. kept at the 0.25 default). */
+    overriddenKeys: Set<string>
   } | null>(null)
 
   // Stable district list reference (reserved for future use)
@@ -117,15 +121,23 @@ function AppInner() {
     setActiveScenario(scenario)
     setMapMode('future')
 
-    // Show rationale immediately; prose loading
-    setPlannerMessage({ rationale: parsed.rationale, prose: null, loading: true })
+    // Determine which weight keys Haiku explicitly overrode (vs. kept at default)
+    const overriddenKeys = new Set(
+      (Object.entries(parsed.weight_overrides) as [string, number | null | undefined][])
+        .filter(([, v]) => v != null)
+        .map(([k]) => k)
+    )
+
+    // Show rationale + weights immediately; prose loading
+    const msgBase = { rationale: parsed.rationale, weights: scenario.weights, overriddenKeys }
+    setPlannerMessage({ ...msgBase, prose: null, loading: true })
 
     // 3. Compute allocation synchronously (don't depend on useMemo render cycle)
     const allocation = allocator.allocate(scenario, scorer)
 
     if (!allocation) {
       // No goal_delta — shouldn't happen for custom, but degrade gracefully
-      setPlannerMessage({ rationale: parsed.rationale, prose: null, loading: false })
+      setPlannerMessage({ ...msgBase, prose: null, loading: false })
       return
     }
 
@@ -133,10 +145,10 @@ function AppInner() {
     try {
       const payload = buildPlanSummaryPayload(scenario, allocation, text, locale as Locale)
       const prose = await summarizePlan(payload)
-      setPlannerMessage({ rationale: parsed.rationale, prose, loading: false })
+      setPlannerMessage({ ...msgBase, prose, loading: false })
     } catch {
       // Summarize failed — show rationale only, no prose
-      setPlannerMessage({ rationale: parsed.rationale, prose: null, loading: false })
+      setPlannerMessage({ ...msgBase, prose: null, loading: false })
     }
   }, [scorer, allocator, locale])
 
@@ -196,6 +208,41 @@ function AppInner() {
           <p className="text-[10px] text-amber-400 leading-snug italic">
             {plannerMessage.rationale}
           </p>
+          {/* Weight breakdown — shows how Haiku tuned the scoring weights */}
+          {plannerMessage.weights && (() => {
+            const w = plannerMessage.weights
+            const WEIGHT_KEYS: (keyof typeof BASE_WEIGHTS)[] = ['displacement', 'age', 'headroom', 'area']
+            if (w.renewal != null) (WEIGHT_KEYS as string[]).push('renewal')
+            const total = WEIGHT_KEYS.reduce((s, k) => s + (w[k as keyof typeof w] ?? 0), 0)
+            const SHORT: Record<string, string> = {
+              displacement: 'displ', age: 'age', headroom: 'headrm', area: 'area', renewal: 'renew',
+            }
+            return (
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <span className="text-[9px] text-slate-500 shrink-0 uppercase tracking-wide">
+                  Haiku weights
+                </span>
+                {WEIGHT_KEYS.map(k => {
+                  const raw = w[k as keyof typeof w] ?? 0
+                  const pct = total > 0 ? Math.round((raw / total) * 100) : 0
+                  const isSet = plannerMessage.overriddenKeys.has(k)
+                  return (
+                    <span
+                      key={k}
+                      title={`${k}: ${raw.toFixed(3)} (${pct}%)${isSet ? ' — tuned by Haiku' : ' — default'}`}
+                      className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${
+                        isSet
+                          ? 'bg-amber-400/25 text-amber-300 ring-1 ring-amber-400/40'
+                          : 'bg-slate-700 text-slate-400'
+                      }`}
+                    >
+                      {SHORT[k]} {pct}%{isSet ? ' ✦' : ''}
+                    </span>
+                  )
+                })}
+              </div>
+            )
+          })()}
           {plannerMessage.loading ? (
             <p className="text-[10px] text-slate-500 animate-pulse">
               {t('planner.summary.loading')}
