@@ -9,11 +9,19 @@ BUILDINGS_DIR = DATA_DIR / "buildings"
 BUILDINGS_PATH = BUILDINGS_DIR / "buildings.geojson"
 
 DTM_URL = "https://static.csdi.gov.hk/csdi-webpage/download/43f9ca1bf5695d98885c767185b0afe1/geotiff"
+POP_CENS_DCD = "https://static.csdi.gov.hk/csdi-webpage/download/b14f9a883e8d5b0eaf864f1aaa12c38d/geojson"
+POP_CENS_LTPU = "https://static.csdi.gov.hk/csdi-webpage/download/ed8911d0b40a564d87bed46fc00773fa/geojson"
+POP_CENS_STPU = "https://static.csdi.gov.hk/csdi-webpage/download/d5c837b46e55558b8d5fd5c18523a6ea/geojson"
 BUILDINGS_URL = (
     "https://portal.csdi.gov.hk/csdi-webpage/file-api"
     "?dataset_id=landsd_rcd_1637211194312_35158&format=geojson&layer_name=Building"
 )
 LOT_URL = "https://static.csdi.gov.hk/csdi-webpage/download/38b3fa389e8254679beb3646a6c20f80/geojson"
+BUILDING_AGE_URL = "https://static.csdi.gov.hk/csdi-webpage/download/0e55c533715b5da3ae0ca6e6024e90b4/csv"
+DISTRICT_BOUNDARIES_URL = "https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=had_rcd_1634523272907_75218&format=geojson&layer_name=DCD"
+GOVERMENT_LAND_ALLOC_URL = "https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=landsd_rcd_1637218348584_91735&format=geojson&layer_name=GovernmentLandAllocation"
+GLA_CODE_URL = "https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=landsd_rcd_1637218348584_91735&format=geojson&layer_name=CT_GLACode"
+PUBLIC_RENTAL_HOUSING_URL = "https://data.housingauthority.gov.hk/psi/rest/export/ha_prhs/ha_prhs_a/en/json"
 
 PUBLIC_HOUSING_ESTATES_ESTATES_URL = "https://res.data.gov.hk/api/get-download-file?name=https%3A%2F%2Fwww.housingauthority.gov.hk%2Fdatagovhk%2Fprh-estates.json"
 PUBLIC_HOUSING_ESTATES_COURTS_URL = "https://res.data.gov.hk/api/get-download-file?name=https%3A%2F%2Fwww.housingauthority.gov.hk%2Fdatagovhk%2Fhos-courts.json"
