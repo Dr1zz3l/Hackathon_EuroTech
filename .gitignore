@@ -4,3 +4,5 @@ __pycache__/
 *.pyo
 .python-version
 Digital_Terrain_Model_DTM_GEOTIFF/
+data/*
+!data/.gitkeep
