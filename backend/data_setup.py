@@ -1,13 +1,42 @@
 import io
+import re
 import urllib.request
 import zipfile
 from pathlib import Path
 
 DATA_DIR = Path(__file__).parent.parent / "data"
+
+# Directories
 DTM_DIR = DATA_DIR / "dtm"
 BUILDINGS_DIR = DATA_DIR / "buildings"
-BUILDINGS_PATH = BUILDINGS_DIR / "buildings.geojson"
+POPULATION_DIR = DATA_DIR / "population"
+LOTS_DIR = DATA_DIR / "lots"
+DISTRICTS_DIR = DATA_DIR / "districts"
+LAND_DIR = DATA_DIR / "land"
+HOUSING_DIR = DATA_DIR / "housing"
+LAND_UTIL_DIR = DATA_DIR / "land_utilization"
+RASTER_LAND_UTIL_DIR = DATA_DIR / "raster_land_utilization"
 
+# File paths
+BUILDINGS_PATH = BUILDINGS_DIR / "buildings.geojson"
+BUILDING_AGE_PATH = BUILDINGS_DIR / "building_age.csv"
+POP_CENS_DCD_PATH = POPULATION_DIR / "census_dcd.geojson"
+POP_CENS_LTPU_PATH = POPULATION_DIR / "census_ltpu.geojson"
+POP_CENS_STPU_PATH = POPULATION_DIR / "census_stpu.geojson"
+LOTS_PATH = LOTS_DIR / "lots.geojson"
+DISTRICT_BOUNDARIES_PATH = DISTRICTS_DIR / "district_boundaries.geojson"
+GOVT_LAND_ALLOC_PATH = LAND_DIR / "government_land_allocation.geojson"
+GLA_CODE_PATH = LAND_DIR / "gla_code.geojson"
+PUBLIC_RENTAL_HOUSING_PATH = HOUSING_DIR / "public_rental_housing.json"
+PRH_ESTATES_PATH = HOUSING_DIR / "prh_estates.json"
+HOS_COURTS_PATH = HOUSING_DIR / "hos_courts.json"
+SHOPPING_CENTRES_PATH = HOUSING_DIR / "shopping_centres.json"
+FLATTED_FACTORIES_PATH = HOUSING_DIR / "flatted_factories.json"
+LAND_UTIL_EN_PATH = LAND_UTIL_DIR / "luhk2024_en.csv"
+LAND_UTIL_TC_PATH = LAND_UTIL_DIR / "luhk2024_tc.csv"
+LAND_UTIL_SC_PATH = LAND_UTIL_DIR / "luhk2024_sc.csv"
+
+# URLs
 DTM_URL = "https://static.csdi.gov.hk/csdi-webpage/download/43f9ca1bf5695d98885c767185b0afe1/geotiff"
 POP_CENS_DCD = "https://static.csdi.gov.hk/csdi-webpage/download/b14f9a883e8d5b0eaf864f1aaa12c38d/geojson"
 POP_CENS_LTPU = "https://static.csdi.gov.hk/csdi-webpage/download/ed8911d0b40a564d87bed46fc00773fa/geojson"
@@ -34,43 +63,123 @@ LAND_UTILIZATION_SC_URL = "https://www.pland.gov.hk/pland_en/info_serv/statistic
 
 RASTER_GRID_LAND_UTILIZATION_URL = "https://static.csdi.gov.hk/csdi-webpage/download/ac678c4e9c2d5f018e3964c39a1cbc0c/geotiff"
 
-def download_dtm():
-    dtm_files = list(DTM_DIR.glob("*.tif"))
-    if dtm_files:
-        print(f"DTM already present: {dtm_files[0]}")
+
+def _make_request(url: str) -> urllib.request.Request:
+    # Fix any bare % not followed by two hex digits to avoid urllib parse errors
+    safe_url = re.sub(r"%(?![0-9A-Fa-f]{2})", "%25", url)
+    return urllib.request.Request(safe_url, headers={"User-Agent": "Mozilla/5.0"})
+
+
+def _fetch(url: str) -> bytes:
+    buf = io.BytesIO()
+    with urllib.request.urlopen(_make_request(url)) as resp:
+        downloaded = 0
+        while chunk := resp.read(1024 * 1024):
+            buf.write(chunk)
+            downloaded += len(chunk)
+            print(f"\r  {downloaded / 1e6:.1f} MB...", end="", flush=True)
+    print()
+    return buf.getvalue()
+
+
+def _download_to_file(url: str, dest_path: Path, label: str) -> None:
+    """Download url to dest_path. Auto-extracts the matching file from a zip archive."""
+    if dest_path.exists():
+        print(f"{label} already present: {dest_path}")
         return
 
-    DTM_DIR.mkdir(parents=True, exist_ok=True)
-    print(f"Downloading DTM from {DTM_URL} ...")
-    with urllib.request.urlopen(DTM_URL) as response:
-        data = response.read()
+    dest_path.parent.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading {label} ...")
+    data = _fetch(url)
 
-    print("Extracting ...")
-    with zipfile.ZipFile(io.BytesIO(data)) as zf:
-        zf.extractall(DTM_DIR)
+    if zipfile.is_zipfile(io.BytesIO(data)):
+        ext = dest_path.suffix.lower()
+        with zipfile.ZipFile(io.BytesIO(data)) as zf:
+            matches = [n for n in zf.namelist() if n.lower().endswith(ext)]
+            src_name = matches[0] if matches else zf.namelist()[0]
+            with zf.open(src_name) as src:
+                dest_path.write_bytes(src.read())
+    else:
+        dest_path.write_bytes(data)
 
-    extracted = list(DTM_DIR.glob("*.tif"))
-    print(f"Done. Extracted to: {extracted}")
+    print(f"{label} saved: {dest_path}")
+
+
+def _download_to_dir(url: str, dest_dir: Path, label: str, check_glob: str = "*") -> None:
+    """Download a zip url and extract all files to dest_dir."""
+    if list(dest_dir.glob(check_glob)):
+        print(f"{label} already present in {dest_dir}")
+        return
+
+    dest_dir.mkdir(parents=True, exist_ok=True)
+    print(f"Downloading {label} ...")
+    data = _fetch(url)
+
+    buf = io.BytesIO(data)
+    with zipfile.ZipFile(buf) as zf:
+        zf.extractall(dest_dir)
+
+    print(f"{label} extracted to: {dest_dir}")
+
+
+def download_dtm():
+    _download_to_dir(DTM_URL, DTM_DIR, "DTM", "*.tif")
 
 
 def download_buildings():
-    if BUILDINGS_PATH.exists():
-        print(f"Buildings already present: {BUILDINGS_PATH}")
-        return
+    _download_to_file(BUILDINGS_URL, BUILDINGS_PATH, "buildings")
 
-    BUILDINGS_DIR.mkdir(parents=True, exist_ok=True)
-    print("Downloading Building GeoJSON (this may take a minute) ...")
-    req = urllib.request.Request(BUILDINGS_URL, headers={"User-Agent": "Mozilla/5.0"})
-    with urllib.request.urlopen(req) as response, open(BUILDINGS_PATH, "wb") as f:
-        downloaded = 0
-        while chunk := response.read(1024 * 1024):
-            f.write(chunk)
-            downloaded += len(chunk)
-            print(f"\r  {downloaded / 1e6:.1f} MB downloaded...", end="", flush=True)
-    print(f"\nBuildings saved: {BUILDINGS_PATH}")
+
+def download_population_census():
+    _download_to_file(POP_CENS_DCD, POP_CENS_DCD_PATH, "population census (DCD)")
+    _download_to_file(POP_CENS_LTPU, POP_CENS_LTPU_PATH, "population census (LTPU)")
+    _download_to_file(POP_CENS_STPU, POP_CENS_STPU_PATH, "population census (STPU)")
+
+
+def download_lots():
+    _download_to_file(LOT_URL, LOTS_PATH, "land lots")
+
+
+def download_building_age():
+    _download_to_file(BUILDING_AGE_URL, BUILDING_AGE_PATH, "building age")
+
+
+def download_district_boundaries():
+    _download_to_file(DISTRICT_BOUNDARIES_URL, DISTRICT_BOUNDARIES_PATH, "district boundaries")
+
+
+def download_government_land():
+    _download_to_file(GOVERMENT_LAND_ALLOC_URL, GOVT_LAND_ALLOC_PATH, "government land allocation")
+    _download_to_file(GLA_CODE_URL, GLA_CODE_PATH, "GLA code")
+
+
+def download_housing():
+    _download_to_file(PUBLIC_RENTAL_HOUSING_URL, PUBLIC_RENTAL_HOUSING_PATH, "public rental housing")
+    _download_to_file(PUBLIC_HOUSING_ESTATES_ESTATES_URL, PRH_ESTATES_PATH, "PRH estates")
+    _download_to_file(PUBLIC_HOUSING_ESTATES_COURTS_URL, HOS_COURTS_PATH, "HOS courts")
+    _download_to_file(PUBLIC_HOUSING_ESTATES_SHOPPING_CENTRES_URL, SHOPPING_CENTRES_PATH, "shopping centres")
+    _download_to_file(PUBLIC_HOUSING_ESTATES_FLATTED_FACTORIES_URL, FLATTED_FACTORIES_PATH, "flatted factories")
+
+
+def download_land_utilization():
+    _download_to_file(LAND_UTILIZATION_EN_URL, LAND_UTIL_EN_PATH, "land utilization (EN)")
+    _download_to_file(LAND_UTILIZATION_TC_URL, LAND_UTIL_TC_PATH, "land utilization (TC)")
+    _download_to_file(LAND_UTILIZATION_SC_URL, LAND_UTIL_SC_PATH, "land utilization (SC)")
+
+
+def download_raster_land_utilization():
+    _download_to_dir(RASTER_GRID_LAND_UTILIZATION_URL, RASTER_LAND_UTIL_DIR, "raster land utilization", "*.tif")
 
 
 def setup():
     DATA_DIR.mkdir(exist_ok=True)
     download_dtm()
     download_buildings()
+    download_population_census()
+    download_lots()
+    download_building_age()
+    download_district_boundaries()
+    download_government_land()
+    download_housing()
+    download_land_utilization()
+    download_raster_land_utilization()
