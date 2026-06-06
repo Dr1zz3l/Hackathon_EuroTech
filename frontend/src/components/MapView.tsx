@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * MapView — 2D choropleth of Hong Kong's 18 districts.
  *

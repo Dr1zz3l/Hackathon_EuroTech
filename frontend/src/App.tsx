@@ -1,3 +1,5 @@
+'use client'
+
 /**
  * App.tsx — Agent B sole integrator.
  *
@@ -10,16 +12,19 @@
  */
 
 import { useState, useEffect, useMemo } from 'react'
+import dynamic from 'next/dynamic'
 import { I18nProvider } from './context/I18nContext'
 import { createScorer } from './lib/scoring'
 import { SCENARIOS } from './scenarios'
 import type { District, Scenario, ScoreResult, Scorer } from './types'
 
-import MapView from './components/MapView'
 import ScenarioPanel from './components/ScenarioPanel'
 import DetailPanel from './components/DetailPanel'
 import MapLegend from './components/MapLegend'
 import LanguageToggle from './components/LanguageToggle'
+
+// Leaflet touches `window`, so the map must never render on the server.
+const MapView = dynamic(() => import('./components/MapView'), { ssr: false })
 
 // ---------------------------------------------------------------------------
 // GeoJSON feature type (mirrors gen_districts_geojson.py output)

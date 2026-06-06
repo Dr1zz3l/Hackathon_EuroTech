@@ -3,8 +3,7 @@
 @tailwind utilities;
 
 html,
-body,
-#root {
+body {
   margin: 0;
   padding: 0;
   width: 100%;
@@ -18,7 +17,7 @@ body {
   font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Leaflet default icon fix (Vite doesn't bundle the marker pngs) */
+/* Leaflet default icon fix (bundler doesn't ship the marker pngs) */
 .leaflet-default-icon-path {
   background-image: none;
 }

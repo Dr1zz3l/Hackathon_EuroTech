@@ -1,3 +1,5 @@
+'use client'
+
 import { createContext, useContext, useState, type ReactNode } from 'react'
 import en from '../i18n/en.json'
 import yue from '../i18n/yue.json'
