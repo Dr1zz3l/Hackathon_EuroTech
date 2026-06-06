@@ -6,18 +6,25 @@
  *   SCENARIOS     from scenarios.ts     (Agent A — do not edit)
  *   District/…    from types.ts         (shared contract — do not edit)
  *
- * State: activeScenario, selectedDistrict, geojson, scorer
+ * State: activeScenario, selectedDistrict, geojson, scorer, allocator, mapMode,
+ *        plannerMessage (LLM summary prose after a custom goal)
  */
 
-import { useState, useEffect, useMemo } from 'react'
-import { I18nProvider } from './context/I18nContext'
+import { useState, useEffect, useMemo, useCallback } from 'react'
+import { I18nProvider, useI18n } from './context/I18nContext'
+import type { Locale } from './context/I18nContext'
 import { createScorer } from './lib/scoring'
 import { createAllocator } from './lib/reallocation'
 import { SCENARIOS } from './scenarios'
 import type { AdjacencyMap, AllocationResult, Allocator, District, Scenario, ScoreResult, Scorer } from './types'
+import {
+  buildSyntheticScenario, buildPlanSummaryPayload,
+  parseGoal, summarizePlan,
+} from './lib/llm'
 
 import MapView from './components/MapView'
 import ScenarioPanel from './components/ScenarioPanel'
+import GoalInput from './components/GoalInput'
 import DetailPanel from './components/DetailPanel'
 import MapLegend from './components/MapLegend'
 import LanguageToggle from './components/LanguageToggle'
@@ -41,6 +48,8 @@ interface DistrictCollection {
 // ---------------------------------------------------------------------------
 
 function AppInner() {
+  const { locale, t } = useI18n()
+
   const [geojson, setGeojson] = useState<DistrictCollection | null>(null)
   const [adjacency, setAdjacency] = useState<AdjacencyMap | null>(null)
   const [scorer, setScorer] = useState<Scorer | null>(null)
@@ -50,6 +59,16 @@ function AppInner() {
   const [loadError, setLoadError] = useState<string | null>(null)
   /** 'future' = dominant future land use (default); 'viability' = score ramp. */
   const [mapMode, setMapMode] = useState<'future' | 'viability'>('future')
+
+  /** LLM planner reply shown below the goal input box. */
+  const [plannerMessage, setPlannerMessage] = useState<{
+    rationale: string
+    prose: string | null
+    loading: boolean
+  } | null>(null)
+
+  // Stable district list reference (reserved for future use)
+  const [_districts, setDistricts] = useState<District[]>([])
 
   // ---- Load GeoJSON + adjacency in parallel at startup ----
   useEffect(() => {
@@ -66,9 +85,10 @@ function AppInner() {
       .then(([data, adj]) => {
         setGeojson(data)
         setAdjacency(adj)
-        const districts = data.features.map(f => f.properties)
-        setScorer(createScorer(districts, adj))
-        setAllocator(createAllocator(districts, adj))
+        const ds = data.features.map(f => f.properties)
+        setDistricts(ds)
+        setScorer(createScorer(ds, adj))
+        setAllocator(createAllocator(ds, adj))
       })
       .catch(err => setLoadError(String(err)))
   }, [])
@@ -84,6 +104,47 @@ function AppInner() {
     if (!activeScenario || !allocator || !scorer) return null
     return allocator.allocate(activeScenario, scorer)
   }, [activeScenario, allocator, scorer])
+
+  // ---- LLM goal handler (orchestrates parse → scenario → allocate → summarize) ----
+  const handleGoal = useCallback(async (text: string) => {
+    if (!scorer || !allocator) throw new Error('Data not loaded yet')
+
+    // 1. Ask the LLM to parse the goal
+    const parsed = await parseGoal(text, locale as Locale)
+
+    // 2. Build synthetic scenario and activate it immediately (map recolours)
+    const scenario = buildSyntheticScenario(parsed)
+    setActiveScenario(scenario)
+    setMapMode('future')
+
+    // Show rationale immediately; prose loading
+    setPlannerMessage({ rationale: parsed.rationale, prose: null, loading: true })
+
+    // 3. Compute allocation synchronously (don't depend on useMemo render cycle)
+    const allocation = allocator.allocate(scenario, scorer)
+
+    if (!allocation) {
+      // No goal_delta — shouldn't happen for custom, but degrade gracefully
+      setPlannerMessage({ rationale: parsed.rationale, prose: null, loading: false })
+      return
+    }
+
+    // 4. Build summary payload and call /api/summarize-plan
+    try {
+      const payload = buildPlanSummaryPayload(scenario, allocation, text, locale as Locale)
+      const prose = await summarizePlan(payload)
+      setPlannerMessage({ rationale: parsed.rationale, prose, loading: false })
+    } catch {
+      // Summarize failed — show rationale only, no prose
+      setPlannerMessage({ rationale: parsed.rationale, prose: null, loading: false })
+    }
+  }, [scorer, allocator, locale])
+
+  // Clear planner message when a preset scenario is selected
+  const handleSelectPreset = useCallback((s: Scenario | null) => {
+    setActiveScenario(s)
+    setPlannerMessage(null)
+  }, [])
 
   // ---- Loading / error states ----
   if (loadError) {
@@ -123,8 +184,29 @@ function AppInner() {
       {/* Scenario buttons */}
       <ScenarioPanel
         activeScenario={activeScenario}
-        onSelect={setActiveScenario}
+        onSelect={handleSelectPreset}
       />
+
+      {/* Free-text goal input (Stage 2 LLM) */}
+      <GoalInput onGoal={handleGoal} />
+
+      {/* Planner reply — rationale + summary prose */}
+      {plannerMessage && (
+        <div className="px-3 py-2 bg-slate-800 border-b border-slate-700 shrink-0 space-y-1">
+          <p className="text-[10px] text-amber-400 leading-snug italic">
+            {plannerMessage.rationale}
+          </p>
+          {plannerMessage.loading ? (
+            <p className="text-[10px] text-slate-500 animate-pulse">
+              {t('planner.summary.loading')}
+            </p>
+          ) : plannerMessage.prose ? (
+            <p className="text-[10px] text-slate-300 leading-relaxed">
+              {plannerMessage.prose}
+            </p>
+          ) : null}
+        </div>
+      )}
 
       {/* Map + panels */}
       <div className="flex flex-1 overflow-hidden">
@@ -149,7 +231,10 @@ function AppInner() {
           {/* Active scenario description badge */}
           {activeScenario && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-amber-400/90 text-slate-900 text-[11px] font-medium px-3 py-1 rounded-full shadow pointer-events-none whitespace-nowrap">
-              {activeScenario.horizon_year} · {SCENARIOS.find(s => s.id === activeScenario.id)?.id.replace(/_/g, ' ')}
+              {activeScenario.horizon_year} ·{' '}
+              {activeScenario.custom_label
+                ?? SCENARIOS.find(s => s.id === activeScenario.id)?.id.replace(/_/g, ' ')
+                ?? activeScenario.id}
             </div>
           )}
         </div>

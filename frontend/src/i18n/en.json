@@ -51,5 +51,17 @@
   "reason.adjacency": "Neighbours rich in target use ({value}) → cluster / corridor",
 
   "lang.toggle": "繁中",
-  "close": "Close"
+  "close": "Close",
+
+  "goal.placeholder": "Describe a planning goal, e.g. more green space in the New Territories",
+  "goal.submit": "Analyse",
+  "goal.loading": "Analysing…",
+  "goal.error": "Couldn't reach the AI planner — try a preset scenario below.",
+
+  "panel.ai_summary.title": "AI summary",
+  "panel.ai_summary.loading": "Generating explanation…",
+
+  "planner.summary.title": "Planner response",
+  "planner.summary.loading": "Computing outcome…",
+  "planner.shortfall": "Goal partially met — not enough donatable land after protections."
 }

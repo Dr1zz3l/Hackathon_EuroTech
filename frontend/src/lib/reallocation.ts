@@ -103,16 +103,24 @@ function normalise(values: number[]): number[] {
 // Per-district receive cap
 // ------------------------------------------------------------
 
-function computeCap(d: District, target: LandCategory): number {
+function effectiveDonorWeight(cat: LandCategory, donorWeights?: Partial<Record<LandCategory, number>>): number {
+  if (!donorWeights) return 1.0;
+  const w = donorWeights[cat];
+  return w == null ? 1.0 : Math.max(0, w);
+}
+
+function computeCap(d: District, target: LandCategory, donorWeights?: Partial<Record<LandCategory, number>>): number {
   const area = d.area_km2;
 
   // How much room to grow toward TARGET_MAX
   const headroomCap = Math.max(0, TARGET_MAX - d.land[target]) * area;
 
-  // How much can donors give (each keeps at least DONOR_FLOOR of current)
+  // How much can donors give (weighted; protected donors weight=0 contribute nothing)
   const donatable = DONOR_CATS
     .filter(c => c !== target)
     .reduce((sum, c) => {
+      const w          = effectiveDonorWeight(c, donorWeights);
+      if (w === 0) return sum;   // protected — cannot donate
       const currentKm2 = d.land[c] * area;
       const floorKm2   = DONOR_FLOOR * currentKm2;
       return sum + Math.max(0, currentKm2 - floorKm2);
@@ -125,18 +133,32 @@ function computeCap(d: District, target: LandCategory): number {
 // Donor split — subtract Δ km² from donor categories proportionally
 // ------------------------------------------------------------
 
-function applyDonors(current: LandUse, deltaKm2: number, target: LandCategory, area: number): LandUse {
+function applyDonors(
+  current: LandUse,
+  deltaKm2: number,
+  target: LandCategory,
+  area: number,
+  donorWeights?: Partial<Record<LandCategory, number>>,
+): LandUse {
   const future = { ...current };
 
-  // Eligible donors: planning cats excluding target and excluding other
-  const donors = DONOR_CATS.filter(c => c !== target);
-  const totalDonorKm2 = donors.reduce((s, c) => s + current[c] * area, 0);
+  // Eligible donors: planning cats excluding target, excluding other, excluding protected (w=0)
+  const donors = DONOR_CATS.filter(c => c !== target && effectiveDonorWeight(c, donorWeights) > 0);
 
-  if (totalDonorKm2 <= 0 || deltaKm2 <= 0) return future;
+  // Weighted donor pool: each donor contributes current_km2 × weight
+  const weightedTotal = donors.reduce((s, c) => {
+    return s + current[c] * area * effectiveDonorWeight(c, donorWeights);
+  }, 0);
+
+  if (weightedTotal <= 0 || deltaKm2 <= 0) {
+    future[target] = Math.min(TARGET_MAX, current[target] + deltaKm2 / area);
+    return future;
+  }
 
   for (const c of donors) {
+    const w          = effectiveDonorWeight(c, donorWeights);
     const currentKm2 = current[c] * area;
-    const share      = currentKm2 / totalDonorKm2;
+    const share      = (currentKm2 * w) / weightedTotal;
     const rawTake    = share * deltaKm2;
     // Respect floor — each donor keeps at least DONOR_FLOOR of its current
     const maxTake    = Math.max(0, currentKm2 - DONOR_FLOOR * currentKm2);
@@ -270,7 +292,7 @@ export function createAllocator(districts: District[], adjacency?: AdjacencyMap)
 
   return {
     allocate(scenario: Scenario, scorer: Scorer): AllocationResult | null {
-      const { goal_delta, target, cluster_strength } = scenario;
+      const { goal_delta, target, cluster_strength, donor_weights } = scenario;
       if (goal_delta == null) return null;
 
       const mu = cluster_strength ?? 1.0;
@@ -279,8 +301,8 @@ export function createAllocator(districts: District[], adjacency?: AdjacencyMap)
       const cityCurrentKm2 = districts.reduce((s, d) => s + d.land[target] * d.area_km2, 0);
       const G = goal_delta * cityCurrentKm2;
 
-      // ---- 2. Per-district caps ----
-      const caps = districts.map(d => computeCap(d, target));
+      // ---- 2. Per-district caps (respects donor protections) ----
+      const caps = districts.map(d => computeCap(d, target, donor_weights));
 
       // ---- 3. Viability scores (clamped) ----
       const viabilities = districts.map(d =>
@@ -308,7 +330,7 @@ export function createAllocator(districts: District[], adjacency?: AdjacencyMap)
         achievedKm2 += deltaKm2;
 
         const current = { ...d.land };
-        const future  = applyDonors(current, deltaKm2, target, d.area_km2);
+        const future  = applyDonors(current, deltaKm2, target, d.area_km2, donor_weights);
 
         // Normalise future fractions so they sum to exactly the same total as current
         // (floating-point drift guard)

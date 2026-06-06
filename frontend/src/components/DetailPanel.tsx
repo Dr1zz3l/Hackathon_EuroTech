@@ -6,8 +6,11 @@
  *   • Provenance badge (land_source)
  */
 
+import { useEffect, useRef, useState } from 'react'
 import type { District, DistrictAllocation, LandUse, Scenario, ScoreResult, ScoreTerm } from '../types'
+import type { Locale } from '../context/I18nContext'
 import { useI18n } from '../context/I18nContext'
+import { buildExplainPayload, explainScore } from '../lib/llm'
 
 // ---------------------------------------------------------------------------
 // Colour map (mirrors MapView + Tailwind config)
@@ -198,6 +201,48 @@ export default function DetailPanel({
   const { t, locale } = useI18n()
   const displayName = locale === 'yue' ? district.name_tc : district.name
 
+  // ---- AI explanation (Stage 2) ----
+  const [aiProse, setAiProse]     = useState<string | null>(null)
+  const [aiLoading, setAiLoading] = useState(false)
+  // Track the last fetch key so stale responses from a prior selection are dropped
+  const fetchKey = useRef<string>('')
+
+  useEffect(() => {
+    if (!scenario || !scoreResult) {
+      setAiProse(null)
+      return
+    }
+
+    const key = `${district.name}|${scenario.id}|${scenario.target}|${scoreResult.score.toFixed(3)}|${locale}`
+    if (key === fetchKey.current) return   // already fetched for this combination
+    fetchKey.current = key
+
+    setAiProse(null)
+    setAiLoading(true)
+
+    const payload = buildExplainPayload(
+      { ...district, land: district.land as unknown as Record<string, number> },
+      scenario,
+      scoreResult,
+      locale as Locale,
+    )
+
+    explainScore(payload)
+      .then(prose => {
+        // Only apply if the user hasn't moved to a different district/scenario
+        if (fetchKey.current === key) {
+          setAiProse(prose)
+        }
+      })
+      .catch(() => {
+        // Silently fail — deterministic top-3 reasons remain visible
+        if (fetchKey.current === key) setAiProse(null)
+      })
+      .finally(() => {
+        if (fetchKey.current === key) setAiLoading(false)
+      })
+  }, [district.name, scenario?.id, scenario?.target, scoreResult?.score, locale]) // eslint-disable-line react-hooks/exhaustive-deps
+
   return (
     <div className="flex flex-col h-full bg-slate-900 text-white overflow-y-auto">
       {/* Header */}
@@ -232,7 +277,23 @@ export default function DetailPanel({
               {t('panel.score.disclaimer')}
             </p>
 
-            {/* Top reasons */}
+            {/* AI summary (Stage 2) — gracefully absent when backend is down */}
+            {(aiLoading || aiProse) && (
+              <div className="mt-3 p-2.5 rounded bg-slate-800 border border-slate-700">
+                <h4 className="text-xs font-medium text-amber-400 mb-1.5">
+                  {t('panel.ai_summary.title')}
+                </h4>
+                {aiLoading ? (
+                  <p className="text-[10px] text-slate-500 animate-pulse">
+                    {t('panel.ai_summary.loading')}
+                  </p>
+                ) : (
+                  <p className="text-xs text-slate-300 leading-relaxed">{aiProse}</p>
+                )}
+              </div>
+            )}
+
+            {/* Top reasons — always shown for transparency */}
             <div className="mt-3 space-y-2">
               <h4 className="text-xs font-medium text-slate-400">
                 {t('panel.reasons.title')}

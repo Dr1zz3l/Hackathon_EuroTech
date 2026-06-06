@@ -92,7 +92,9 @@ export type ScenarioId =
   | 'green_hk_2050'
   | 'industrial_growth'
   | 'education_hub'
-  | 'urban_renewal';
+  | 'urban_renewal'
+  /** Stage 2 — synthetic scenario built from a free-text LLM goal. */
+  | 'custom';
 
 /**
  * A pre-defined planning scenario.
@@ -122,6 +124,17 @@ export interface Scenario {
    * educational clusters); moderate (~0.8) allows more spread (industrial).
    */
   cluster_strength?: number;
+  /**
+   * Stage 2 — display label for a custom/LLM-generated scenario.
+   * Preset scenarios leave this undefined; the `label_key` i18n path is used instead.
+   */
+  custom_label?:   string;
+  /**
+   * Stage 2 — per-category donor weight for the reallocation engine.
+   * Protected category = weight 0; preferred = weight 1.0; de-emphasised = 0.2–0.4.
+   * Missing keys default to 1.0 (neutral). `other` and the target are never donors.
+   */
+  donor_weights?:  Partial<Record<LandCategory, number>>;
 }
 
 // ------------------------------------------------------------
