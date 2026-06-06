@@ -2,6 +2,10 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ─────────────────────────────────────────────────────────────
+   Root chrome — Vercel light system (see public/DESIGN-vercel.md)
+   ───────────────────────────────────────────────────────────── */
+
 html,
 body {
   margin: 0;
@@ -9,15 +13,35 @@ body {
   width: 100%;
   height: 100%;
   overflow: hidden;
+  background: #fafafa;            /* canvas-soft */
+  color: #171717;                 /* ink */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  text-rendering: optimizeLegibility;
+  font-feature-settings: 'ss01', 'ss03', 'cv11';   /* Geist stylistic alternates */
 }
 
 body {
   overscroll-behavior: none;
   -webkit-tap-highlight-color: transparent;
-  font-family: ui-sans-serif, system-ui, sans-serif;
 }
 
-/* Leaflet default icon fix (bundler doesn't ship the marker pngs) */
+/* Brand-aligned selection — ink chip with near-white text */
+::selection {
+  background: #171717;
+  color: #f2f2f2;
+}
+
+/* iOS safe-area bottom pad */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Leaflet overrides — re-tone for the light canvas
+   ───────────────────────────────────────────────────────────── */
+
+/* Hide the default broken-icon path (we don't render marker pins) */
 .leaflet-default-icon-path {
   background-image: none;
 }
@@ -25,9 +49,201 @@ body {
 /* Choropleth polygon hover cursor */
 .leaflet-interactive {
   cursor: pointer;
+  transition: fill-opacity 120ms ease, stroke-width 120ms ease;
 }
 
-/* iOS safe-area bottom pad */
-.safe-area-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+/* Map container: hide Leaflet's default off-white seam against canvas-soft */
+.leaflet-container {
+  background: #f5f5f5 !important;
+  font-family: var(--font-geist-sans), Inter, system-ui, sans-serif !important;
+  outline: none;
+}
+
+/* Zoom control — re-skin to Vercel hairline cards */
+.leaflet-bar {
+  border: none !important;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.02),
+    0 2px 2px rgba(0, 0, 0, 0.04),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+  border-radius: 8px !important;
+  overflow: hidden;
+}
+
+.leaflet-bar a,
+.leaflet-bar a:hover {
+  background: #ffffff !important;
+  color: #171717 !important;
+  border-bottom: 1px solid #ebebeb !important;
+  width: 32px !important;
+  height: 32px !important;
+  line-height: 32px !important;
+  font-size: 16px !important;
+  font-weight: 500;
+}
+
+.leaflet-bar a:last-child {
+  border-bottom: none !important;
+}
+
+.leaflet-bar a:hover {
+  background: #f5f5f5 !important;
+}
+
+.leaflet-bar a.leaflet-disabled {
+  background: #fafafa !important;
+  color: #a1a1a1 !important;
+  cursor: default;
+}
+
+/* Tooltip — full Vercel chrome (card-marketing) */
+.leaflet-tooltip {
+  background: #ffffff !important;
+  color: #171717 !important;
+  border: none !important;
+  border-radius: 6px !important;
+  padding: 6px 10px !important;
+  font-family: var(--font-geist-sans), Inter, system-ui, sans-serif !important;
+  font-size: 12px !important;
+  font-weight: 500 !important;
+  letter-spacing: -0.02em;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.02),
+    0 2px 2px rgba(0, 0, 0, 0.04),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.06) !important;
+}
+
+.leaflet-tooltip-top:before,
+.leaflet-tooltip-bottom:before,
+.leaflet-tooltip-left:before,
+.leaflet-tooltip-right:before {
+  display: none;
+}
+
+/* Attribution — mute it to a near-invisible mono caption */
+.leaflet-control-attribution {
+  background: rgba(255, 255, 255, 0.72) !important;
+  backdrop-filter: blur(6px);
+  color: #888888 !important;
+  font-family: var(--font-geist-mono), ui-monospace, monospace !important;
+  font-size: 10px !important;
+  padding: 2px 6px !important;
+  border-top-left-radius: 6px;
+}
+
+.leaflet-control-attribution a {
+  color: #4d4d4d !important;
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Reusable type tokens (used directly in JSX with @apply)
+   ───────────────────────────────────────────────────────────── */
+
+@layer components {
+  /* Mono caption-eyebrow — uppercase, tight, the platform voice */
+  .eyebrow {
+    @apply font-mono uppercase text-[10px] tracking-[0.12em] text-mute;
+  }
+
+  /* Display sizes */
+  .display-xl {
+    @apply font-sans text-[48px] font-semibold leading-[48px] tracking-display-xl;
+  }
+  .display-lg {
+    @apply font-sans text-[32px] font-semibold leading-[40px] tracking-display-lg;
+  }
+  .display-md {
+    @apply font-sans text-[24px] font-semibold leading-[32px] tracking-display-md;
+  }
+  .display-sm {
+    @apply font-sans text-[20px] font-semibold leading-[28px] tracking-display-sm;
+  }
+
+  /* Hairline divider (1px) */
+  .hairline {
+    @apply border-b border-hairline;
+  }
+}
+
+@layer utilities {
+  /* Hide scrollbar but allow scroll (used in the scenario pill row) */
+  .no-scrollbar::-webkit-scrollbar {
+    display: none;
+  }
+  .no-scrollbar {
+    -ms-overflow-style: none;
+    scrollbar-width: none;
+  }
+}
+
+/* ─────────────────────────────────────────────────────────────
+   Vercel-tone range slider — used in StylingPanel
+   Track = canvas-soft-2, fill = ink, thumb = white card on hairline
+   ───────────────────────────────────────────────────────────── */
+
+.vercel-slider {
+  -webkit-appearance: none;
+  appearance: none;
+  height: 24px;
+  background: transparent;
+  outline: none;
+  padding: 0;
+}
+
+/* WebKit track + thumb */
+.vercel-slider::-webkit-slider-runnable-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: linear-gradient(
+    to right,
+    #171717 0%,
+    #171717 var(--val, 70%),
+    #f5f5f5 var(--val, 70%),
+    #f5f5f5 100%
+  );
+}
+.vercel-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 9999px;
+  background: #ffffff;
+  margin-top: -6px;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.04),
+    0 2px 2px rgba(0, 0, 0, 0.06),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
+  transition: transform 80ms ease;
+}
+.vercel-slider:hover::-webkit-slider-thumb {
+  transform: scale(1.06);
+}
+.vercel-slider:active::-webkit-slider-thumb {
+  transform: scale(1.12);
+}
+
+/* Firefox track + thumb */
+.vercel-slider::-moz-range-track {
+  height: 4px;
+  border-radius: 9999px;
+  background: #f5f5f5;
+}
+.vercel-slider::-moz-range-progress {
+  height: 4px;
+  border-radius: 9999px;
+  background: #171717;
+}
+.vercel-slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border: none;
+  border-radius: 9999px;
+  background: #ffffff;
+  box-shadow:
+    0 1px 1px rgba(0, 0, 0, 0.04),
+    0 2px 2px rgba(0, 0, 0, 0.06),
+    inset 0 0 0 1px rgba(0, 0, 0, 0.12);
+  cursor: pointer;
 }

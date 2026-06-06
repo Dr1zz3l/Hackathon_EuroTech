@@ -44,5 +44,51 @@
   "reason.ageing_stock": "{value} → 重建候選地區",
 
   "lang.toggle": "EN",
-  "close": "關閉"
+  "close": "關閉",
+
+  "sidebar.chat.title": "Navi",
+  "sidebar.chat.subtitle": "人工智能助理 · 規劃幫手",
+  "sidebar.chat.empty": "對話功能即將推出。",
+  "sidebar.chat.empty_sub": "我們將在這裡接入規劃用 AI 助理。",
+  "sidebar.chat.placeholder": "輸入任何問題，@ 提及，/ 指令",
+  "sidebar.chat.expand": "開啟對話",
+  "sidebar.chat.collapse": "收起對話",
+
+  "sidebar.layers.title": "圖層",
+  "sidebar.layers.expand": "開啟圖層",
+  "sidebar.layers.collapse": "收起圖層",
+  "sidebar.layers.add": "加入數據",
+  "sidebar.layers.action.zoom": "縮放至圖層",
+  "sidebar.layers.action.visibility_show": "顯示圖層",
+  "sidebar.layers.action.visibility_hide": "隱藏圖層",
+  "sidebar.layers.action.more": "更多選項",
+
+  "sidebar.layers.menu.lock": "鎖定圖層",
+  "sidebar.layers.menu.data_table": "資料表",
+  "sidebar.layers.menu.styling": "樣式",
+  "sidebar.layers.menu.rename": "重新命名",
+  "sidebar.layers.menu.download": "下載",
+  "sidebar.layers.menu.actions": "操作",
+  "sidebar.layers.menu.delete": "刪除",
+
+  "layer.districts": "香港各區",
+  "layer.districts.subtitle": "18 個分區 · GeoJSON",
+  "layer.basemap": "底圖",
+  "layer.basemap.subtitle": "Carto · Positron",
+
+  "panel.right.tab.detail": "分區",
+  "panel.right.tab.style": "樣式",
+  "panel.right.expand": "開啟面板",
+  "panel.right.collapse": "收起面板",
+  "panel.right.detail.empty.title": "點選分區開始。",
+  "panel.right.detail.empty.sub": "可行性概覽會在此顯示。",
+
+  "styling.layer": "圖層",
+  "styling.opacity": "填充透明度",
+  "styling.palette": "色板",
+  "styling.palette.land": "土地用途",
+  "styling.palette.scenario": "可行性評分",
+  "styling.palette.land.help": "按主要土地類別為每區上色。",
+  "styling.palette.scenario.help": "按目前情境下的可行性為每區上色。",
+  "styling.reset": "回復預設"
 }

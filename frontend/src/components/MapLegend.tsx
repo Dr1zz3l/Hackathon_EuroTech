@@ -1,18 +1,21 @@
+'use client'
+
 /**
- * MapLegend — floats bottom-left on the map.
- * Shows land-use colour key (default mode) or a score ramp (scenario mode).
+ * MapLegend — Vercel card-marketing chrome.
+ * Floats bottom-left over the map: white canvas card, hairline border, mono eyebrow.
+ * Shows land-use swatches (default mode) or a brand-aligned score ramp (scenario mode).
  */
 
 import type { Scenario } from '../types'
 import { useI18n } from '../context/I18nContext'
 
 const LAND_ENTRIES = [
-  { key: 'residential', colour: '#f87171' },
-  { key: 'industrial',  colour: '#a78bfa' },
-  { key: 'commercial',  colour: '#fb923c' },
-  { key: 'green',       colour: '#4ade80' },
-  { key: 'educational', colour: '#60a5fa' },
-  { key: 'other',       colour: '#94a3b8' },
+  { key: 'residential', colour: '#ff0080' },
+  { key: 'industrial',  colour: '#7928ca' },
+  { key: 'commercial',  colour: '#f5a623' },
+  { key: 'green',       colour: '#50e3c2' },
+  { key: 'educational', colour: '#0070f3' },
+  { key: 'other',       colour: '#a1a1a1' },
 ]
 
 interface MapLegendProps {
@@ -23,37 +26,42 @@ export default function MapLegend({ activeScenario }: MapLegendProps) {
   const { t } = useI18n()
 
   return (
-    <div className="absolute bottom-6 left-3 z-[1000] bg-slate-900/90 backdrop-blur rounded-lg p-3 text-xs text-white shadow-lg pointer-events-none">
+    <div
+      className="
+        absolute bottom-4 left-4 z-[1000]
+        bg-canvas rounded-lg shadow-card-md
+        p-4 min-w-[200px]
+        pointer-events-none
+      "
+    >
       {activeScenario ? (
         <>
-          <p className="font-semibold text-slate-300 mb-1.5">
-            {t('map.legend.viability')}
-          </p>
-          {/* Gradient ramp */}
+          <p className="eyebrow mb-2.5">{t('map.legend.viability')}</p>
+          {/* Brand-aligned gradient ramp: link → warning → error */}
           <div
-            className="w-28 h-2.5 rounded-full mb-1"
+            className="w-full h-2 rounded-full mb-1.5"
             style={{
-              background: 'linear-gradient(to right, #93c5fd, #fde68a, #ef4444)',
+              background: 'linear-gradient(to right, #0070f3, #f5a623, #ee0000)',
             }}
           />
-          <div className="flex justify-between text-[10px] text-slate-400">
+          <div className="flex justify-between text-[11px] text-mute font-mono">
             <span>{t('map.legend.low')}</span>
             <span>{t('map.legend.high')}</span>
           </div>
         </>
       ) : (
         <>
-          <p className="font-semibold text-slate-300 mb-1.5">
-            {t('map.legend.title')}
-          </p>
-          <div className="space-y-1">
+          <p className="eyebrow mb-2.5">{t('map.legend.title')}</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
             {LAND_ENTRIES.map(({ key, colour }) => (
-              <div key={key} className="flex items-center gap-1.5">
+              <div key={key} className="flex items-center gap-2">
                 <span
-                  className="inline-block w-2.5 h-2.5 rounded-sm"
+                  className="inline-block w-2.5 h-2.5 rounded-sm shrink-0 shadow-hairline-inset"
                   style={{ background: colour }}
                 />
-                <span className="text-slate-300">{t(`land.${key}`)}</span>
+                <span className="text-[12px] text-body leading-none">
+                  {t(`land.${key}`)}
+                </span>
               </div>
             ))}
           </div>
