@@ -4,6 +4,23 @@
 
 We are building a two-day hackathon MVP for predicting sewage clogging, drainage overload, and flood-related city infrastructure issues during typhoons and heavy rainfall.
 
+## Branch Workflow
+
+We will work with three layers of branches:
+
+* `main` branch for stable, integrated work
+* `frontend` and `backend` branches for the two primary workstreams
+* Feature branches created from either `frontend` or `backend` for focused changes
+
+Suggested flow:
+
+1. Keep `main` protected and stable
+2. Merge completed frontend work into `frontend`
+3. Merge completed backend work into `backend`
+4. Create short-lived feature branches from the relevant workstream branch
+5. Merge feature branches back into `frontend` or `backend`
+6. Merge `frontend` and `backend` into `main` when ready for integration
+
 The target setting is cities such as Hong Kong and other cities in the Greater Bay Area.
 
 The MVP should show a simple map-based mobile web interface where users can:
