@@ -81,6 +81,11 @@ export interface WeightSet {
    * Only active when the optional stretch is built and the field is present.
    */
   renewal?:     number;
+  /**
+   * norm(neighbour-average of land[target]): spatial cluster / corridor signal.
+   * Only active when adjacency.json is loaded and passed to createScorer.
+   */
+  adjacency?:   number;
 }
 
 export type ScenarioId =
@@ -113,7 +118,7 @@ export interface Scenario {
 
 /** One factor's contribution to the final viability score. */
 export interface ScoreTerm {
-  key: 'low_density' | 'age_factor' | 'headroom' | 'large_area' | 'ageing_stock';
+  key: 'low_density' | 'age_factor' | 'headroom' | 'large_area' | 'ageing_stock' | 'adjacency';
   /**
    * Weight × normalised value — the addend to the total score.
    * Terms are sorted by this value descending before being returned.
@@ -143,7 +148,18 @@ export interface NormStats {
   residential: { min: number; max: number };
   /** Present only when ageing_building_share is available on all districts. */
   ageing?:     { min: number; max: number };
+  /**
+   * Per-category min/max of the neighbour-average of land[cat].
+   * Present only when adjacency data is passed to createScorer.
+   */
+  adjacency?:  Partial<Record<LandCategory, { min: number; max: number }>>;
 }
+
+/**
+ * Adjacency map produced by scripts/build_adjacency.py.
+ * Maps each district name to its list of border-neighbour names.
+ */
+export type AdjacencyMap = Record<string, string[]>;
 
 /**
  * The scorer factory exported by scoring.ts.
@@ -154,3 +170,6 @@ export interface Scorer {
   score: (district: District, scenario: Scenario) => ScoreResult;
   norms: NormStats;
 }
+
+/** Factory signature — adjacency is optional; app degrades gracefully without it. */
+export type CreateScorer = (districts: District[], adjacency?: AdjacencyMap) => Scorer;

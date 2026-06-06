@@ -10,7 +10,7 @@
 
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
-import type { District, Scenario, ScoreResult, Scorer } from '../types'
+import type { AdjacencyMap, District, Scenario, ScoreResult, Scorer } from '../types'
 import { useI18n } from '../context/I18nContext'
 
 // ---------------------------------------------------------------------------
@@ -80,6 +80,8 @@ interface MapViewProps {
   activeScenario: Scenario | null
   selectedDistrict: District | null
   onSelectDistrict: (d: District) => void
+  /** Adjacency graph — used to highlight border-neighbours of the selected district. */
+  adjacency: AdjacencyMap | null
 }
 
 // ---------------------------------------------------------------------------
@@ -92,6 +94,7 @@ export default function MapView({
   activeScenario,
   selectedDistrict,
   onSelectDistrict,
+  adjacency,
 }: MapViewProps) {
   const { locale } = useI18n()
   const mapRef = useRef<L.Map | null>(null)
@@ -146,16 +149,22 @@ export default function MapView({
       style: (feature) => {
         const d = feature?.properties as District
         const isSelected = d.name === selectedDistrict?.name
+        const isNeighbour = !isSelected
+          && selectedDistrict !== null
+          && adjacency !== null
+          && (adjacency[selectedDistrict.name] ?? []).includes(d.name)
+
         const fillColor = activeScenario
           ? scoreColour(scoreMap.current.get(d.name)?.score ?? 0)
           : dominantLandColour(d)
 
-        return {
-          fillColor,
-          fillOpacity: isSelected ? 0.9 : 0.65,
-          color: isSelected ? '#1e293b' : '#fff',
-          weight: isSelected ? 2.5 : 1,
+        if (isSelected) {
+          return { fillColor, fillOpacity: 0.9, color: '#1e293b', weight: 2.5, dashArray: undefined }
         }
+        if (isNeighbour) {
+          return { fillColor, fillOpacity: 0.75, color: '#fbbf24', weight: 2, dashArray: '5 4' }
+        }
+        return { fillColor, fillOpacity: 0.65, color: '#fff', weight: 1, dashArray: undefined }
       },
       onEachFeature: (feature, layer) => {
         const d = feature.properties as District
@@ -186,7 +195,7 @@ export default function MapView({
 
     layerRef.current = layer
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeScenario, selectedDistrict, locale, geojson, scorer])
+  }, [activeScenario, selectedDistrict, locale, geojson, scorer, adjacency])
 
   return (
     <div

@@ -42,6 +42,7 @@
   "reason.low_density": "Lower density ({value}) → less displacement",
   "reason.age_factor": "{value} → displacement-sensitivity signal",
   "reason.ageing_stock": "{value} → renewal candidate",
+  "reason.adjacency": "Neighbours rich in target use ({value}) → cluster / corridor",
 
   "lang.toggle": "繁中",
   "close": "Close"

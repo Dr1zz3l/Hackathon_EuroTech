@@ -1,0 +1,128 @@
+{
+  "Southern": [
+    "Wan Chai",
+    "Central & Western",
+    "Eastern",
+    "Islands",
+    "Sai Kung"
+  ],
+  "Wan Chai": [
+    "Southern",
+    "Central & Western",
+    "Eastern",
+    "Yau Tsim Mong"
+  ],
+  "Central & Western": [
+    "Southern",
+    "Wan Chai",
+    "Islands",
+    "Yau Tsim Mong",
+    "Kwai Tsing"
+  ],
+  "Eastern": [
+    "Southern",
+    "Wan Chai",
+    "Yau Tsim Mong",
+    "Kwun Tong",
+    "Kowloon City",
+    "Sai Kung"
+  ],
+  "Islands": [
+    "Southern",
+    "Central & Western",
+    "Kwai Tsing",
+    "Tsuen Wan",
+    "Tuen Mun",
+    "Sai Kung"
+  ],
+  "Yau Tsim Mong": [
+    "Wan Chai",
+    "Central & Western",
+    "Eastern",
+    "Sham Shui Po",
+    "Kowloon City",
+    "Kwai Tsing"
+  ],
+  "Kwun Tong": [
+    "Eastern",
+    "Kowloon City",
+    "Wong Tai Sin",
+    "Sai Kung"
+  ],
+  "Sham Shui Po": [
+    "Yau Tsim Mong",
+    "Kowloon City",
+    "Kwai Tsing",
+    "Sha Tin"
+  ],
+  "Kowloon City": [
+    "Eastern",
+    "Yau Tsim Mong",
+    "Kwun Tong",
+    "Sham Shui Po",
+    "Wong Tai Sin",
+    "Sha Tin"
+  ],
+  "Wong Tai Sin": [
+    "Kwun Tong",
+    "Kowloon City",
+    "Sha Tin",
+    "Sai Kung"
+  ],
+  "Kwai Tsing": [
+    "Central & Western",
+    "Islands",
+    "Yau Tsim Mong",
+    "Sham Shui Po",
+    "Tsuen Wan",
+    "Sha Tin"
+  ],
+  "Tsuen Wan": [
+    "Islands",
+    "Kwai Tsing",
+    "Tuen Mun",
+    "Sha Tin",
+    "Yuen Long",
+    "Tai Po"
+  ],
+  "Tuen Mun": [
+    "Islands",
+    "Tsuen Wan",
+    "Yuen Long"
+  ],
+  "Sha Tin": [
+    "Sham Shui Po",
+    "Kowloon City",
+    "Wong Tai Sin",
+    "Kwai Tsing",
+    "Tsuen Wan",
+    "Sai Kung",
+    "Tai Po"
+  ],
+  "Sai Kung": [
+    "Southern",
+    "Eastern",
+    "Islands",
+    "Kwun Tong",
+    "Wong Tai Sin",
+    "Sha Tin",
+    "Tai Po"
+  ],
+  "Yuen Long": [
+    "Tsuen Wan",
+    "Tuen Mun",
+    "Tai Po",
+    "North"
+  ],
+  "Tai Po": [
+    "Tsuen Wan",
+    "Sha Tin",
+    "Sai Kung",
+    "Yuen Long",
+    "North"
+  ],
+  "North": [
+    "Yuen Long",
+    "Tai Po"
+  ]
+}

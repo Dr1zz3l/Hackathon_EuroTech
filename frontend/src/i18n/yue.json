@@ -42,6 +42,7 @@
   "reason.low_density": "密度較低（{value}）→ 遷移影響較少",
   "reason.age_factor": "{value} → 遷移敏感度信號",
   "reason.ageing_stock": "{value} → 重建候選地區",
+  "reason.adjacency": "鄰區目標用途密集（{value}）→ 連片發展",
 
   "lang.toggle": "EN",
   "close": "關閉"

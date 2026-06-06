@@ -13,7 +13,7 @@ import { useState, useEffect, useMemo } from 'react'
 import { I18nProvider } from './context/I18nContext'
 import { createScorer } from './lib/scoring'
 import { SCENARIOS } from './scenarios'
-import type { District, Scenario, ScoreResult, Scorer } from './types'
+import type { AdjacencyMap, District, Scenario, ScoreResult, Scorer } from './types'
 
 import MapView from './components/MapView'
 import ScenarioPanel from './components/ScenarioPanel'
@@ -41,22 +41,29 @@ interface DistrictCollection {
 
 function AppInner() {
   const [geojson, setGeojson] = useState<DistrictCollection | null>(null)
+  const [adjacency, setAdjacency] = useState<AdjacencyMap | null>(null)
   const [scorer, setScorer] = useState<Scorer | null>(null)
   const [activeScenario, setActiveScenario] = useState<Scenario | null>(null)
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
 
-  // ---- Load GeoJSON once at startup ----
+  // ---- Load GeoJSON + adjacency in parallel at startup ----
   useEffect(() => {
-    fetch('/districts.geojson')
-      .then(r => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`)
+    Promise.all([
+      fetch('/districts.geojson').then(r => {
+        if (!r.ok) throw new Error(`districts.geojson: HTTP ${r.status}`)
         return r.json() as Promise<DistrictCollection>
-      })
-      .then(data => {
+      }),
+      fetch('/adjacency.json').then(r => {
+        if (!r.ok) throw new Error(`adjacency.json: HTTP ${r.status}`)
+        return r.json() as Promise<AdjacencyMap>
+      }),
+    ])
+      .then(([data, adj]) => {
         setGeojson(data)
+        setAdjacency(adj)
         const districts = data.features.map(f => f.properties)
-        setScorer(createScorer(districts))
+        setScorer(createScorer(districts, adj))
       })
       .catch(err => setLoadError(String(err)))
   }, [])
@@ -118,6 +125,7 @@ function AppInner() {
             activeScenario={activeScenario}
             selectedDistrict={selectedDistrict}
             onSelectDistrict={setSelectedDistrict}
+            adjacency={adjacency}
           />
           <MapLegend activeScenario={activeScenario} />
 

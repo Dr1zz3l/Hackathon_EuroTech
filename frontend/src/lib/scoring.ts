@@ -4,12 +4,13 @@
  * Pure TypeScript — no React, no side effects, no network calls.
  * Agent B imports `createScorer`; never edits this file.
  *
- * Implements MASTER_BUILD_DOC §5.0 Stage 0 (WLC baseline).
+ * Implements MASTER_BUILD_DOC §5.0 Stage 0 (WLC baseline) +
+ * §5 Stage 3 (adjacency-graph term, optional).
  * Weights are supplied by scenarios.ts; AHP-derived values replace
  * the hand-set defaults at Stage 1 without any change here.
  */
 
-import type { District, LandCategory, NormStats, Scenario, ScoreResult, ScoreTerm, Scorer } from '../types';
+import type { AdjacencyMap, District, LandCategory, NormStats, Scenario, ScoreResult, ScoreTerm, Scorer } from '../types';
 
 // ------------------------------------------------------------
 // Internal helpers
@@ -29,10 +30,34 @@ function bounds(values: number[]): { min: number; max: number } {
 // Normalisation precomputation
 // ------------------------------------------------------------
 
-function precomputeNorms(districts: District[]): NormStats {
+function precomputeNorms(
+  districts:  District[],
+  adjacency?: AdjacencyMap,
+): NormStats {
   const ageingValues = districts
     .map(d => d.ageing_building_share)
     .filter((v): v is number => v !== undefined);
+
+  // --- Adjacency: neighbour-average of land[cat] for every land category ---
+  // Stored as { cat: { min, max } } — looked up at score time by scenario.target.
+  let adjacencyNorms: NormStats['adjacency'];
+  if (adjacency) {
+    const lookup = new Map(districts.map(d => [d.name, d]));
+    const CATS: LandCategory[] = ['residential', 'industrial', 'commercial', 'green', 'educational'];
+    adjacencyNorms = {};
+    for (const cat of CATS) {
+      const avgs = districts.map(d => {
+        const neighbours = adjacency[d.name] ?? [];
+        if (neighbours.length === 0) return 0;
+        const sum = neighbours.reduce((s, name) => {
+          const n = lookup.get(name);
+          return s + (n ? n.land[cat] : 0);
+        }, 0);
+        return sum / neighbours.length;
+      });
+      adjacencyNorms[cat] = bounds(avgs);
+    }
+  }
 
   return {
     density_log: bounds(districts.map(d => Math.log10(d.density))),
@@ -41,7 +66,35 @@ function precomputeNorms(districts: District[]): NormStats {
     residential: bounds(districts.map(d => d.land.residential)),
     // Only computed when all 18 districts carry the optional field
     ageing: ageingValues.length === districts.length ? bounds(ageingValues) : undefined,
+    adjacency: adjacencyNorms,
   };
+}
+
+// Pre-built per-district neighbour-average lookup (populated by createScorer when adjacency given)
+// Shape: Map<districtName, Map<LandCategory, average>>
+type NeighbourAvgMap = Map<string, Partial<Record<LandCategory, number>>>;
+
+function buildNeighbourAvgs(districts: District[], adjacency: AdjacencyMap): NeighbourAvgMap {
+  const lookup = new Map(districts.map(d => [d.name, d]));
+  const CATS: LandCategory[] = ['residential', 'industrial', 'commercial', 'green', 'educational'];
+  const result: NeighbourAvgMap = new Map();
+  for (const d of districts) {
+    const neighbours = adjacency[d.name] ?? [];
+    const entry: Partial<Record<LandCategory, number>> = {};
+    for (const cat of CATS) {
+      if (neighbours.length === 0) {
+        entry[cat] = 0;
+      } else {
+        const sum = neighbours.reduce((s, name) => {
+          const n = lookup.get(name);
+          return s + (n ? n.land[cat] : 0);
+        }, 0);
+        entry[cat] = sum / neighbours.length;
+      }
+    }
+    result.set(d.name, entry);
+  }
+  return result;
 }
 
 // ------------------------------------------------------------
@@ -49,9 +102,10 @@ function precomputeNorms(districts: District[]): NormStats {
 // ------------------------------------------------------------
 
 function computeScore(
-  district: District,
-  scenario: Scenario,
-  norms: NormStats,
+  district:     District,
+  scenario:     Scenario,
+  norms:        NormStats,
+  neighbourAvg: NeighbourAvgMap | null,
 ): ScoreResult {
   const { target, weights } = scenario;
   const d = district;
@@ -113,6 +167,24 @@ function computeScore(
     });
   }
 
+  // Optional adjacency term (Stage 3) — active when adjacency data is loaded AND
+  // the scenario includes a non-zero adjacency weight.
+  if (
+    weights.adjacency !== undefined &&
+    neighbourAvg !== null &&
+    norms.adjacency?.[target as LandCategory]
+  ) {
+    const avgBounds = norms.adjacency[target as LandCategory]!;
+    const avg = neighbourAvg.get(d.name)?.[target as LandCategory] ?? 0;
+    const adjacencyNorm = minmax(avg, avgBounds);
+    rawTerms.push({
+      key:          'adjacency',
+      weight:       weights.adjacency,
+      norm:         adjacencyNorm,
+      displayValue: `${(avg * 100).toFixed(0)}% neighbour avg`,
+    });
+  }
+
   // --- Normalise weights so they always sum to 1 ---
   const totalWeight = rawTerms.reduce((sum, t) => sum + t.weight, 0);
 
@@ -142,14 +214,18 @@ function computeScore(
  * The returned `score` function is bound to the precomputed normalisation
  * stats and is safe to call on every scenario switch with no overhead.
  *
+ * Pass `adjacency` (loaded from adjacency.json) to activate Stage 3.
+ * The app degrades gracefully without it — all adjacency weights are ignored.
+ *
  * @example
- * const scorer = createScorer(geojson.features.map(f => f.properties));
+ * const scorer = createScorer(districts, adjacency);
  * const result = scorer.score(district, activeScenario);
  */
-export function createScorer(districts: District[]): Scorer {
-  const norms = precomputeNorms(districts);
+export function createScorer(districts: District[], adjacency?: AdjacencyMap): Scorer {
+  const norms        = precomputeNorms(districts, adjacency);
+  const neighbourAvg = adjacency ? buildNeighbourAvgs(districts, adjacency) : null;
   return {
-    score: (district, scenario) => computeScore(district, scenario, norms),
+    score: (district, scenario) => computeScore(district, scenario, norms, neighbourAvg),
     norms,
   };
 }
