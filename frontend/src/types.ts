@@ -56,6 +56,18 @@ export interface District {
    * Only present when the optional building-age stretch (§5.0) is built.
    */
   ageing_building_share?: number;
+
+  // ── Neighbourhood-level fields (absent on the 18 top-level districts) ──────
+  /**
+   * Name of the parent administrative district.
+   * Only present on STPU neighbourhood features from neighbourhoods.geojson.
+   */
+  parent_district?: string;
+  /**
+   * Raw STPU code from the census file (e.g. "111").
+   * Used for display and debugging; absent on top-level district features.
+   */
+  tpu_code?: string;
 }
 
 // ------------------------------------------------------------

@@ -280,6 +280,90 @@ function assertConservation(
 // Public factory
 // ------------------------------------------------------------
 
+// ------------------------------------------------------------
+// Neighbourhood → district aggregation
+// ------------------------------------------------------------
+
+/**
+ * Derive a district-level AllocationResult by aggregating neighbourhood deltas.
+ *
+ * This is the correct direction of derivation: we run one flat QP over all
+ * 211 STPU neighbourhoods, then sum upward so the district view is exactly
+ * consistent with (= sum of) the neighbourhood view.  Adding a top-down
+ * constraint would only make the neighbourhood QP worse.
+ *
+ * Each district's `current` / `future` fractions are area-weighted averages of
+ * its constituent neighbourhoods.  `received_km2` is a direct sum.
+ * `goalKm2` and `achievedKm2` are carried through unchanged from the flat result.
+ *
+ * @param nbhdResult   The AllocationResult from a flat QP over neighbourhoods.
+ * @param neighbourhoods  The same District[] array passed to createAllocator.
+ *                        Each entry must carry a `parent_district` field.
+ */
+export function aggregateToDistricts(
+  nbhdResult: AllocationResult,
+  neighbourhoods: District[],
+): AllocationResult {
+  // Group neighbourhoods by parent district
+  const groups = new Map<string, District[]>();
+  for (const n of neighbourhoods) {
+    const parent = n.parent_district ?? '__unknown__';
+    if (!groups.has(parent)) groups.set(parent, []);
+    groups.get(parent)!.push(n);
+  }
+
+  const byDistrict = new Map<string, DistrictAllocation>();
+
+  for (const [distName, nbhds] of groups) {
+    if (distName === '__unknown__') continue;
+
+    // Total developable area for this district (sum of neighbourhood areas)
+    const totalArea = nbhds.reduce((s, n) => s + n.area_km2, 0);
+    if (totalArea === 0) continue;
+
+    // Area-weighted average of current/future fractions
+    const curKm2: Record<string, number> = {};
+    const futKm2: Record<string, number> = {};
+    for (const cat of ALL_CATS) {
+      curKm2[cat] = 0;
+      futKm2[cat] = 0;
+    }
+
+    for (const n of nbhds) {
+      const alloc = nbhdResult.byDistrict.get(n.name);
+      if (!alloc) continue;
+      for (const cat of ALL_CATS) {
+        curKm2[cat] += alloc.current[cat] * n.area_km2;
+        futKm2[cat] += alloc.future[cat] * n.area_km2;
+      }
+    }
+
+    const current = {} as LandUse;
+    const future  = {} as LandUse;
+    const delta   = {} as LandUse;
+
+    for (const cat of ALL_CATS) {
+      current[cat] = curKm2[cat] / totalArea;
+      future[cat]  = futKm2[cat] / totalArea;
+      delta[cat]   = future[cat] - current[cat];
+    }
+
+    const received_km2 = nbhds.reduce((s, n) => {
+      const alloc = nbhdResult.byDistrict.get(n.name);
+      return s + (alloc?.received_km2 ?? 0);
+    }, 0);
+
+    byDistrict.set(distName, { name: distName, current, future, delta, received_km2 });
+  }
+
+  return {
+    byDistrict,
+    target:       nbhdResult.target,
+    goalKm2:      nbhdResult.goalKm2,
+    achievedKm2:  nbhdResult.achievedKm2,
+  };
+}
+
 /**
  * Call once at app startup with the full district array (same as createScorer).
  * The returned allocator is bound to the adjacency data and safe to reuse

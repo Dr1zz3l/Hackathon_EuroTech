@@ -33,7 +33,7 @@ import dynamic from 'next/dynamic'
 import { I18nProvider, useI18n } from './context/I18nContext'
 import type { Locale } from './context/I18nContext'
 import { createScorer } from './lib/scoring'
-import { createAllocator } from './lib/reallocation'
+import { createAllocator, aggregateToDistricts } from './lib/reallocation'
 import { SCENARIOS } from './scenarios'
 import type {
   AdjacencyMap, AllocationResult, Allocator,
@@ -119,6 +119,12 @@ function AppInner() {
   const [districts, setDistricts] = useState<District[]>([])
   const [loadError, setLoadError] = useState<string | null>(null)
 
+  // ── Neighbourhood-level data (loaded asynchronously; optional) ───────────────
+  const [nbhdGeojson,   setNbhdGeojson]   = useState<DistrictCollection | null>(null)
+  const [nbhds,         setNbhds]         = useState<District[]>([])
+  const [nbhdScorer,    setNbhdScorer]    = useState<Scorer | null>(null)
+  const [nbhdAllocator, setNbhdAllocator] = useState<Allocator | null>(null)
+
   // ── Scenario / selection state ───────────────────────────────────────────────
   const [activeScenario,   setActiveScenario]   = useState<Scenario | null>(null)
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null)
@@ -162,22 +168,57 @@ function AppInner() {
       .catch(err => setLoadError(String(err)))
   }, [])
 
+  // ── Load neighbourhood GeoJSON asynchronously (graceful degradation) ─────────
+  // Runs independently — a failure here leaves the app in district-only mode.
+  useEffect(() => {
+    fetch('/neighbourhoods.geojson')
+      .then(r => {
+        if (!r.ok) throw new Error(`neighbourhoods.geojson: HTTP ${r.status}`)
+        return r.json() as Promise<DistrictCollection>
+      })
+      .then(data => {
+        setNbhdGeojson(data)
+        const ns = data.features.map(f => f.properties)
+        setNbhds(ns)
+        setNbhdScorer(createScorer(ns))
+        setNbhdAllocator(createAllocator(ns))
+      })
+      .catch(() => {
+        // Neighbourhood data unavailable — map stays in district-only mode
+      })
+  }, [])
+
   // ── Switch palette automatically when a scenario activates ──────────────────
   useEffect(() => {
     setPaletteMode(activeScenario ? 'scenario' : 'land')
   }, [activeScenario])
 
-  // ── Score for selected district under active scenario ────────────────────────
+  // ── Score for selected district/neighbourhood under active scenario ───────────
   const scoreResult = useMemo<ScoreResult | null>(() => {
-    if (!selectedDistrict || !activeScenario || !scorer) return null
+    if (!selectedDistrict || !activeScenario) return null
+    // Use the neighbourhood scorer when a neighbourhood is selected (finer norms)
+    if (selectedDistrict.tpu_code && nbhdScorer) {
+      return nbhdScorer.score(selectedDistrict, activeScenario)
+    }
+    if (!scorer) return null
     return scorer.score(selectedDistrict, activeScenario)
-  }, [selectedDistrict, activeScenario, scorer])
+  }, [selectedDistrict, activeScenario, scorer, nbhdScorer])
 
-  // ── Reallocation result for the active scenario ───────────────────────────────
+  // ── Neighbourhood-level flat QP (211 units, source of truth) ─────────────────
+  const nbhdAllocationResult = useMemo<AllocationResult | null>(() => {
+    if (!activeScenario || !nbhdAllocator || !nbhdScorer) return null
+    return nbhdAllocator.allocate(activeScenario, nbhdScorer)
+  }, [activeScenario, nbhdAllocator, nbhdScorer])
+
+  // ── District-level allocation: aggregated from neighbourhood QP when available,
+  //    otherwise the standalone 18-district QP (fallback for district-only mode). ──
   const allocationResult = useMemo<AllocationResult | null>(() => {
+    if (nbhdAllocationResult && nbhds.length > 0) {
+      return aggregateToDistricts(nbhdAllocationResult, nbhds)
+    }
     if (!activeScenario || !allocator || !scorer) return null
     return allocator.allocate(activeScenario, scorer)
-  }, [activeScenario, allocator, scorer])
+  }, [nbhdAllocationResult, nbhds, activeScenario, allocator, scorer])
 
   // ── LLM goal handler ─────────────────────────────────────────────────────────
   // Orchestrates: parse-goal → synthetic scenario → reallocation → summarize-plan
@@ -372,6 +413,9 @@ function AppInner() {
             basemapOpacity={basemapLayer.opacity}
             paletteMode={paletteMode}
             apiRef={mapApi}
+            nbhdGeojson={nbhdGeojson}
+            nbhdScorer={nbhdScorer}
+            nbhdAllocationResult={nbhdAllocationResult}
           />
           <MapLegend
             activeScenario={activeScenario}
@@ -466,7 +510,13 @@ function AppInner() {
                     district={selectedDistrict}
                     scenario={activeScenario}
                     scoreResult={scoreResult}
-                    allocation={allocationResult?.byDistrict.get(selectedDistrict.name) ?? null}
+                    allocation={
+                      selectedDistrict.tpu_code
+                        // Neighbourhood selected → look up in the flat neighbourhood QP result
+                        ? (nbhdAllocationResult?.byDistrict.get(selectedDistrict.name) ?? null)
+                        // District selected → look up in the aggregated district result
+                        : (allocationResult?.byDistrict.get(selectedDistrict.name) ?? null)
+                    }
                     onClose={() => setSelectedDistrict(null)}
                   />
                 ) : (

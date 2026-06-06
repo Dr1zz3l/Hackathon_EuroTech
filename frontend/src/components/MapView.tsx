@@ -1,13 +1,18 @@
 'use client'
 
 /**
- * MapView — 2D choropleth of Hong Kong's 18 districts.
+ * MapView — 2D choropleth of Hong Kong's 18 districts + 211 STPU neighbourhoods.
  *
  * Visual system: Vercel light canvas (see public/DESIGN-vercel.md).
  *   - Carto Positron tiles (clean, near-white) sit on the canvas-soft body
  *   - Land-use palette re-keyed to brand gradient stops
  *   - Viability ramp: link-blue → warning amber → error red
  *   - Selected district stroked in link-blue; adjacency neighbours in dashed amber
+ *
+ * Zoom reveal:
+ *   - Below zoom 12.5 → district choropleth (18 polygons)
+ *   - At/above zoom 12.5 → neighbourhood choropleth (211 STPU polygons)
+ *   - A Leaflet `zoomend` listener swaps layers at the threshold.
  *
  * Layer-state contract (atlas.co-style):
  *   - `districtsVisible/Opacity` and `basemapVisible/Opacity` drive live layer state
@@ -16,6 +21,7 @@
  *   - `allocationResult` + `mapMode='future'` triggers future land colouring + delta labels
  *   - `adjacency` highlights border-neighbours of the selected district
  *   - `apiRef` is filled with a handle the parent can call to imperative-zoom
+ *   - `nbhdGeojson` / `nbhdScorer` / `nbhdAllocationResult` power the neighbourhood layer
  */
 
 import { useEffect, useRef } from 'react'
@@ -23,7 +29,12 @@ import L from 'leaflet'
 import type { AllocationResult, AdjacencyMap, District, LandUse, Scenario, ScoreResult, Scorer } from '../types'
 import { useI18n } from '../context/I18nContext'
 
-// ─── Palette ───────────────────────────────────────────────────────────────
+// ─── Zoom threshold ───────────────────────────────────────────────────────────
+
+/** Below this zoom: show district layer. At/above: show neighbourhood layer. */
+const NBHD_ZOOM = 12.5
+
+// ─── Palette ──────────────────────────────────────────────────────────────────
 
 const LAND_COLOURS: Record<string, string> = {
   residential: '#ff0080',
@@ -72,7 +83,7 @@ function scoreColour(score: number): string {
   return `rgb(${r},${g},${b})`
 }
 
-// ─── Types ─────────────────────────────────────────────────────────────────
+// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DistrictFeature {
   type: 'Feature'
@@ -110,9 +121,80 @@ interface MapViewProps {
   paletteMode: PaletteMode
   /** Parent fills this with the imperative handle on mount */
   apiRef?: { current: MapApi | null }
+  // ── Neighbourhood layer (optional — graceful degradation when absent) ─────────
+  /** 211 STPU neighbourhood GeoJSON (loaded asynchronously). */
+  nbhdGeojson?: DistrictCollection | null
+  /** Scorer with norms computed over the 211 neighbourhood units. */
+  nbhdScorer?: Scorer | null
+  /** Flat QP allocation result over all 211 neighbourhoods. */
+  nbhdAllocationResult?: AllocationResult | null
 }
 
-// ─── Component ─────────────────────────────────────────────────────────────
+// ─── Delta label builder (shared between district and neighbourhood layers) ───
+
+function buildDeltaMarker(
+  d: District,
+  alloc: import('../types').DistrictAllocation | undefined,
+  lyr: L.Layer,
+  map: L.Map,
+): L.Marker | null {
+  if (!alloc) return null
+
+  const delta = alloc.delta
+  type Cat = keyof typeof delta
+  const cats = Object.keys(delta) as Cat[]
+  const gainCat = cats.reduce((a, b) => delta[a] >= delta[b] ? a : b)
+  const lossCat = cats.reduce((a, b) => delta[a] <= delta[b] ? a : b)
+
+  const gainPct = +(delta[gainCat] * 100).toFixed(1)
+  const lossPct = +(delta[lossCat] * 100).toFixed(1)
+
+  if (Math.abs(gainPct) < 0.1 && Math.abs(lossPct) < 0.1) return null
+
+  const CAT_LABEL: Record<string, string> = {
+    residential: 'Res', industrial: 'Ind', commercial: 'Com',
+    green: 'Green', educational: 'Edu', other: 'Other',
+  }
+
+  const gainLine = gainPct >= 0.1
+    ? `<div style="color:#16a34a;font-weight:600">+${gainPct}% ${CAT_LABEL[gainCat] ?? gainCat}</div>`
+    : ''
+  const lossLine = lossPct <= -0.1
+    ? `<div style="color:#dc2626">${lossPct}% ${CAT_LABEL[lossCat] ?? lossCat}</div>`
+    : ''
+  const html = gainLine + lossLine
+  if (!html) return null
+
+  const pathLayer = lyr as unknown as L.Polygon
+  const bounds = typeof pathLayer.getBounds === 'function' ? pathLayer.getBounds() : null
+  const center = bounds ? bounds.getCenter() : null
+  if (!center) return null
+
+  const icon = L.divIcon({
+    className: '',
+    html: `<div style="
+        transform:translate(-50%,-50%);
+        display:inline-block;
+        font-size:11px;line-height:1.4;text-align:center;
+        font-family:ui-monospace,monospace;
+        background:rgba(250,250,250,0.92);
+        color:#111;
+        padding:3px 6px;border-radius:4px;
+        border:1px solid rgba(0,0,0,0.1);
+        white-space:nowrap;pointer-events:none;
+        box-shadow:0 1px 4px rgba(0,0,0,0.12);
+      ">${html}</div>`,
+    iconSize: [0, 0],
+    iconAnchor: [0, 0],
+  })
+
+  void d  // suppress unused warning (name available for debugging)
+  const marker = L.marker(center, { icon, interactive: false, zIndexOffset: 500 })
+  marker.addTo(map)
+  return marker
+}
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export default function MapView({
   geojson,
@@ -129,26 +211,37 @@ export default function MapView({
   basemapOpacity,
   paletteMode,
   apiRef,
+  nbhdGeojson,
+  nbhdScorer,
+  nbhdAllocationResult,
 }: MapViewProps) {
   const { locale } = useI18n()
 
-  const containerRef = useRef<HTMLDivElement>(null)
-  const mapRef = useRef<L.Map | null>(null)
-  const tileLayerRef = useRef<L.TileLayer | null>(null)
-  const geoLayerRef = useRef<L.GeoJSON | null>(null)
-  const boundsFitRef = useRef<boolean>(false)
+  const containerRef     = useRef<HTMLDivElement>(null)
+  const mapRef           = useRef<L.Map | null>(null)
+  const tileLayerRef     = useRef<L.TileLayer | null>(null)
+  const geoLayerRef      = useRef<L.GeoJSON | null>(null)
+  const nbhdLayerRef     = useRef<L.GeoJSON | null>(null)
+  const boundsFitRef     = useRef<boolean>(false)
 
-  // Precompute all scores when scenario changes — kept in a ref so we don't
-  // re-render the entire layer just because of a scenario flick.
-  const scoreMap = useRef<Map<string, ScoreResult>>(new Map())
+  // Precompute all scores at render time (ref keeps them off the re-render path)
+  const scoreMap     = useRef<Map<string, ScoreResult>>(new Map())
+  const nbhdScoreMap = useRef<Map<string, ScoreResult>>(new Map())
+
   if (activeScenario) {
     geojson.features.forEach(f => {
       const d = f.properties
       scoreMap.current.set(d.name, scorer.score(d, activeScenario))
     })
+    if (nbhdGeojson && nbhdScorer) {
+      nbhdGeojson.features.forEach(f => {
+        const d = f.properties as District
+        nbhdScoreMap.current.set(d.name, nbhdScorer.score(d, activeScenario))
+      })
+    }
   }
 
-  // ── Build map once ──────────────────────────────────────────────────────
+  // ── Build map once ──────────────────────────────────────────────────────────
   useEffect(() => {
     if (!containerRef.current || mapRef.current) return
 
@@ -181,12 +274,47 @@ export default function MapView({
       mapRef.current = null
       tileLayerRef.current = null
       geoLayerRef.current = null
+      nbhdLayerRef.current = null
       boundsFitRef.current = false
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── Re-render GeoJSON layer when any styling input changes ──────────────
+  // ── Zoom listener: swap district ↔ neighbourhood layers at NBHD_ZOOM ────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+
+    const onZoom = () => {
+      const zoom = map.getZoom()
+      const showNbhd = zoom >= NBHD_ZOOM && nbhdLayerRef.current !== null
+
+      // District layer: only visible below the threshold
+      if (geoLayerRef.current) {
+        if (showNbhd) {
+          if (map.hasLayer(geoLayerRef.current)) geoLayerRef.current.remove()
+        } else if (districtsVisible) {
+          if (!map.hasLayer(geoLayerRef.current)) geoLayerRef.current.addTo(map)
+        }
+      }
+
+      // Neighbourhood layer: only visible at/above the threshold
+      if (nbhdLayerRef.current) {
+        if (showNbhd) {
+          if (!map.hasLayer(nbhdLayerRef.current)) nbhdLayerRef.current.addTo(map)
+        } else {
+          if (map.hasLayer(nbhdLayerRef.current)) nbhdLayerRef.current.remove()
+        }
+      }
+    }
+
+    map.on('zoomend', onZoom)
+    return () => { map.off('zoomend', onZoom) }
+  // Re-wire whenever visibility prop changes so the closure is current
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [districtsVisible])
+
+  // ── Re-render district GeoJSON layer when any styling input changes ──────────
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -196,22 +324,20 @@ export default function MapView({
       geoLayerRef.current = null
     }
 
-    // Delta label markers — cleared and rebuilt alongside the GeoJSON layer
     const deltaMarkers: L.Marker[] = []
 
-    // Fill colour decision:
-    //  1. paletteMode=scenario → viability score ramp
-    //  2. mapMode=future + allocationResult → projected dominant land use
-    //  3. default → current dominant land use
     const useScoreRamp = paletteMode === 'scenario' && activeScenario != null
 
     const layer = L.geoJSON(geojson as unknown as GeoJSON.GeoJsonObject, {
       style: (feature) => {
         const d = feature?.properties as District
+        // A neighbourhood is "selected" if its parent district name matches
         const isSelected = d.name === selectedDistrict?.name
+          || d.name === (selectedDistrict?.parent_district)
         const isNeighbour = !isSelected
           && selectedDistrict !== null
           && adjacency !== null
+          && !selectedDistrict.tpu_code  // only highlight adjacency at district level
           && (adjacency[selectedDistrict.name] ?? []).includes(d.name)
 
         let fillColor: string
@@ -272,6 +398,7 @@ export default function MapView({
           mouseout: (e) => {
             const l = e.target as L.Path
             const sel = d.name === selectedDistrict?.name
+              || d.name === selectedDistrict?.parent_district
             l.setStyle({
               fillOpacity: (sel ? 0.88 : 0.7) * districtsOpacity,
               weight: sel ? 2.5 : 1.25,
@@ -279,67 +406,19 @@ export default function MapView({
           },
         })
 
-        // Delta labels — only in future mode with allocation data (non-score palette)
+        // Delta labels for district layer (shown at low zoom)
         if (!useScoreRamp && activeScenario && mapMode === 'future' && allocationResult) {
           const alloc = allocationResult.byDistrict.get(d.name)
-          if (alloc) {
-            const delta = alloc.delta
-            type Cat = keyof typeof delta
-            const cats = Object.keys(delta) as Cat[]
-            const gainCat = cats.reduce((a, b) => delta[a] >= delta[b] ? a : b)
-            const lossCat = cats.reduce((a, b) => delta[a] <= delta[b] ? a : b)
-
-            const gainPct = +(delta[gainCat] * 100).toFixed(1)
-            const lossPct = +(delta[lossCat] * 100).toFixed(1)
-
-            if (Math.abs(gainPct) < 0.1 && Math.abs(lossPct) < 0.1) return
-
-            const CAT_LABEL: Record<string, string> = {
-              residential: 'Res', industrial: 'Ind', commercial: 'Com',
-              green: 'Green', educational: 'Edu', other: 'Other',
-            }
-
-            const gainLine = gainPct >= 0.1
-              ? `<div style="color:#16a34a;font-weight:600">+${gainPct}% ${CAT_LABEL[gainCat] ?? gainCat}</div>`
-              : ''
-            const lossLine = lossPct <= -0.1
-              ? `<div style="color:#dc2626">${lossPct}% ${CAT_LABEL[lossCat] ?? lossCat}</div>`
-              : ''
-            const html = gainLine + lossLine
-            if (!html) return
-
-            const pathLayer = lyr as unknown as L.Polygon
-            const bounds = typeof pathLayer.getBounds === 'function' ? pathLayer.getBounds() : null
-            const center = bounds ? bounds.getCenter() : null
-            if (!center) return
-
-            const icon = L.divIcon({
-              className: '',
-              html: `<div style="
-                  transform:translate(-50%,-50%);
-                  display:inline-block;
-                  font-size:11px;line-height:1.4;text-align:center;
-                  font-family:ui-monospace,monospace;
-                  background:rgba(250,250,250,0.92);
-                  color:#111;
-                  padding:3px 6px;border-radius:4px;
-                  border:1px solid rgba(0,0,0,0.1);
-                  white-space:nowrap;pointer-events:none;
-                  box-shadow:0 1px 4px rgba(0,0,0,0.12);
-                ">${html}</div>`,
-              iconSize: [0, 0],
-              iconAnchor: [0, 0],
-            })
-
-            const marker = L.marker(center, { icon, interactive: false, zIndexOffset: 500 })
-            marker.addTo(map)
-            deltaMarkers.push(marker)
-          }
+          const marker = buildDeltaMarker(d, alloc, lyr, map)
+          if (marker) deltaMarkers.push(marker)
         }
       },
     })
 
-    if (districtsVisible) layer.addTo(map)
+    // Apply zoom-based visibility: districts shown only below the threshold
+    const currentZoom = map.getZoom()
+    const showAtThisZoom = currentZoom < NBHD_ZOOM
+    if (districtsVisible && showAtThisZoom) layer.addTo(map)
     geoLayerRef.current = layer
 
     // Fit to HK bounds on first render only
@@ -348,7 +427,6 @@ export default function MapView({
       boundsFitRef.current = true
     }
 
-    // Cleanup delta markers when this effect re-runs
     return () => {
       deltaMarkers.forEach(m => m.remove())
     }
@@ -358,19 +436,117 @@ export default function MapView({
     locale, geojson, scorer, adjacency, paletteMode, districtsOpacity,
   ])
 
-  // ── React to districts visibility ───────────────────────────────────────
+  // ── Build neighbourhood GeoJSON layer ───────────────────────────────────────
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map || !nbhdGeojson) return
+
+    if (nbhdLayerRef.current) {
+      nbhdLayerRef.current.remove()
+      nbhdLayerRef.current = null
+    }
+
+    const nbhdDeltaMarkers: L.Marker[] = []
+    const useScoreRamp = paletteMode === 'scenario' && activeScenario != null
+
+    const layer = L.geoJSON(nbhdGeojson as unknown as GeoJSON.GeoJsonObject, {
+      style: (feature) => {
+        const d = feature?.properties as District
+        const isSelected = d.name === selectedDistrict?.name
+
+        let fillColor: string
+        if (useScoreRamp) {
+          fillColor = scoreColour(nbhdScoreMap.current.get(d.name)?.score ?? 0)
+        } else if (mapMode === 'future' && nbhdAllocationResult) {
+          const alloc = nbhdAllocationResult.byDistrict.get(d.name)
+          fillColor = alloc
+            ? dominantLandColourFromUse(alloc.future)
+            : dominantLandColour(d)
+        } else {
+          fillColor = dominantLandColour(d)
+        }
+
+        if (isSelected) {
+          return {
+            fillColor,
+            fillOpacity: 0.90 * districtsOpacity,
+            color: '#0070f3',
+            weight: 2.5,
+            dashArray: undefined,
+          }
+        }
+        return {
+          fillColor,
+          fillOpacity: 0.72 * districtsOpacity,
+          color: '#ffffff',
+          weight: 0.75,
+          dashArray: undefined,
+        }
+      },
+      onEachFeature: (feature, lyr) => {
+        const d = feature.properties as District
+        const displayName = locale === 'yue' ? d.name_tc : d.name
+
+        lyr.bindTooltip(displayName, {
+          permanent: false,
+          sticky: true,
+          direction: 'top',
+          offset: [0, -4],
+        })
+
+        lyr.on({
+          click: () => onSelectDistrict(d),
+          mouseover: (e) => {
+            const l = e.target as L.Path
+            l.setStyle({ fillOpacity: 0.88 * districtsOpacity, weight: 1.5 })
+          },
+          mouseout: (e) => {
+            const l = e.target as L.Path
+            const sel = d.name === selectedDistrict?.name
+            l.setStyle({
+              fillOpacity: (sel ? 0.90 : 0.72) * districtsOpacity,
+              weight: sel ? 2.5 : 0.75,
+            })
+          },
+        })
+
+        // Delta labels for neighbourhood layer (shown at high zoom only)
+        if (!useScoreRamp && activeScenario && mapMode === 'future' && nbhdAllocationResult) {
+          const alloc = nbhdAllocationResult.byDistrict.get(d.name)
+          const marker = buildDeltaMarker(d, alloc, lyr, map)
+          if (marker) nbhdDeltaMarkers.push(marker)
+        }
+      },
+    })
+
+    // Apply zoom-based visibility: neighbourhood layer only at/above threshold
+    const currentZoom = map.getZoom()
+    if (currentZoom >= NBHD_ZOOM) layer.addTo(map)
+    nbhdLayerRef.current = layer
+
+    return () => {
+      nbhdDeltaMarkers.forEach(m => m.remove())
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [
+    activeScenario, nbhdAllocationResult, mapMode, selectedDistrict,
+    locale, nbhdGeojson, nbhdScorer, paletteMode, districtsOpacity,
+  ])
+
+  // ── React to districts visibility ───────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
     const layer = geoLayerRef.current
     if (!map || !layer) return
     if (districtsVisible) {
-      if (!map.hasLayer(layer)) layer.addTo(map)
+      // Only add if we're below the neighbourhood zoom threshold
+      if (map.getZoom() < NBHD_ZOOM && !map.hasLayer(layer)) layer.addTo(map)
     } else {
       if (map.hasLayer(layer)) layer.remove()
     }
   }, [districtsVisible])
 
-  // ── React to basemap visibility ─────────────────────────────────────────
+  // ── React to basemap visibility ─────────────────────────────────────────────
   useEffect(() => {
     const map = mapRef.current
     const tile = tileLayerRef.current
@@ -382,12 +558,12 @@ export default function MapView({
     }
   }, [basemapVisible])
 
-  // ── React to basemap opacity ────────────────────────────────────────────
+  // ── React to basemap opacity ────────────────────────────────────────────────
   useEffect(() => {
     tileLayerRef.current?.setOpacity(basemapOpacity)
   }, [basemapOpacity])
 
-  // ── Imperative API handed back to the parent ────────────────────────────
+  // ── Imperative API handed back to the parent ────────────────────────────────
   useEffect(() => {
     if (!apiRef) return
     apiRef.current = {
@@ -406,7 +582,7 @@ export default function MapView({
     }
   }, [apiRef])
 
-  // ── Invalidate Leaflet's cached size when sidebars expand/collapse ───────
+  // ── Invalidate Leaflet's cached size when sidebars expand/collapse ───────────
   useEffect(() => {
     if (!containerRef.current || !mapRef.current) return
     const ro = new ResizeObserver(() => {
