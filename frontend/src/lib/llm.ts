@@ -161,7 +161,7 @@ export async function explainScore(payload: {
 // ---------------------------------------------------------------------------
 
 /** Neutral equal-weight base (sums to 1.0). */
-const BASE_WEIGHTS: WeightSet = {
+export const BASE_WEIGHTS: WeightSet = {
   displacement: 0.25,
   age:          0.25,
   headroom:     0.25,
