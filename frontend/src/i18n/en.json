@@ -37,11 +37,11 @@
   "panel.pct_over65": "Aged 65+",
   "panel.reasons.title": "Top reasons for this score",
 
-  "reason.headroom": "Only {pct}% {category} today → room to grow",
+  "reason.headroom": "{value} → room to grow",
   "reason.large_area": "Large district ({value}) → high aggregate impact",
   "reason.low_density": "Lower density ({value}) → less displacement",
-  "reason.age_factor": "{value} aged 65+ → displacement-sensitivity signal",
-  "reason.ageing_stock": "{value} ageing building stock → renewal candidate",
+  "reason.age_factor": "{value} → displacement-sensitivity signal",
+  "reason.ageing_stock": "{value} → renewal candidate",
 
   "lang.toggle": "繁中",
   "close": "Close"

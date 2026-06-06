@@ -37,11 +37,11 @@
   "panel.pct_over65": "65歲或以上",
   "panel.reasons.title": "評分主要原因",
 
-  "reason.headroom": "現時{category}僅佔{pct}% → 有增長空間",
+  "reason.headroom": "{value} → 有增長空間",
   "reason.large_area": "大型地區（{value}）→ 整體影響力高",
   "reason.low_density": "密度較低（{value}）→ 遷移影響較少",
-  "reason.age_factor": "{value}為65歲或以上 → 遷移敏感度信號",
-  "reason.ageing_stock": "{value}為老化樓宇 → 重建候選地區",
+  "reason.age_factor": "{value} → 遷移敏感度信號",
+  "reason.ageing_stock": "{value} → 重建候選地區",
 
   "lang.toggle": "EN",
   "close": "關閉"
