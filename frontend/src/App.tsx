@@ -67,8 +67,8 @@ function AppInner() {
     loading: boolean
   } | null>(null)
 
-  // Stable district list reference (reserved for future use)
-  const [_districts, setDistricts] = useState<District[]>([])
+  // District array used for area-weighted city_delta and TC names in LLM summary
+  const [districts, setDistricts] = useState<District[]>([])
 
   // ---- Load GeoJSON + adjacency in parallel at startup ----
   useEffect(() => {
@@ -131,7 +131,7 @@ function AppInner() {
 
     // 4. Build summary payload and call /api/summarize-plan
     try {
-      const payload = buildPlanSummaryPayload(scenario, allocation, text, locale as Locale)
+      const payload = buildPlanSummaryPayload(scenario, allocation, text, locale as Locale, districts)
       const prose = await summarizePlan(payload)
       setPlannerMessage({ rationale: parsed.rationale, prose, loading: false })
     } catch {

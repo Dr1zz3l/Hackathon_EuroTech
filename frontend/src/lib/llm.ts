@@ -8,7 +8,7 @@
  * In production set VITE_API_BASE if the backend is on a different origin.
  */
 
-import type { AllocationResult, LandCategory, Scenario, ScoreResult, WeightSet } from '../types'
+import type { AllocationResult, District, LandCategory, Scenario, ScoreResult, WeightSet } from '../types'
 
 const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
 
@@ -83,34 +83,39 @@ export function buildPlanSummaryPayload(
   allocationResult: AllocationResult,
   userText: string,
   locale: 'en' | 'yue',
+  districts: District[],  // MINOR-5/6: needed for area-weighted delta and real name_tc
 ): PlanSummaryPayload {
-  // City-wide area-weighted delta
+  // Build a lookup from district name → District (for area + TC name)
+  const districtByName = new Map(districts.map(d => [d.name, d]))
+
+  // MINOR-5 fix: area-weighted city delta — Σ(delta_d × area_d) / Σ area_d
+  // Previously used a simple mean (all 18 districts weighted equally regardless of area).
   let totalArea = 0
-  const sumDelta: Record<string, number> = {}
+  const sumWeightedDelta: Record<string, number> = {}
 
   for (const alloc of allocationResult.byDistrict.values()) {
-    // We need the district area to weight correctly — use current fractions sum × area
-    // delta is in fractions; multiply by district area to get km² delta, then divide
-    // by city area at the end for a weighted average fraction.
-    // Since area_km2 isn't in alloc, we recover it from received_km2 / delta[target]
-    // instead — or just use received_km2 as the weight proxy.
-    // Simpler: use received_km2 total to normalise (good enough for display).
+    const area = districtByName.get(alloc.name)?.area_km2 ?? 1
     for (const [cat, dv] of Object.entries(alloc.delta)) {
-      sumDelta[cat] = (sumDelta[cat] ?? 0) + (dv as number)
+      sumWeightedDelta[cat] = (sumWeightedDelta[cat] ?? 0) + (dv as number) * area
     }
-    totalArea += 1
+    totalArea += area
   }
 
   const cityDelta: Record<string, number> = {}
-  for (const [cat, s] of Object.entries(sumDelta)) {
-    cityDelta[cat] = s / totalArea  // simple average across districts
+  for (const [cat, s] of Object.entries(sumWeightedDelta)) {
+    cityDelta[cat] = totalArea > 0 ? s / totalArea : 0
   }
 
   // Top 3 districts by received_km2
+  // MINOR-6 fix: use the real TC name instead of the English name
   const sorted = Array.from(allocationResult.byDistrict.values())
     .sort((a, b) => b.received_km2 - a.received_km2)
     .slice(0, 3)
-    .map(a => ({ name: a.name, name_tc: a.name, received_km2: a.received_km2 }))
+    .map(a => ({
+      name:         a.name,
+      name_tc:      districtByName.get(a.name)?.name_tc ?? a.name,
+      received_km2: a.received_km2,
+    }))
 
   return {
     user_text:    userText,

@@ -150,7 +150,12 @@ function applyDonors(
     return s + current[c] * area * effectiveDonorWeight(c, donorWeights);
   }, 0);
 
-  if (weightedTotal <= 0 || deltaKm2 <= 0) {
+  // CRITICAL-1 fix: when there is nothing to add, return current unchanged.
+  // Do NOT clamp future[target] to TARGET_MAX — a district already at 0.86 green
+  // must stay at 0.86, not silently lose green because it received nothing.
+  if (deltaKm2 <= 0) return future;
+
+  if (weightedTotal <= 0) {
     future[target] = Math.min(TARGET_MAX, current[target] + deltaKm2 / area);
     return future;
   }
@@ -327,7 +332,6 @@ export function createAllocator(districts: District[], adjacency?: AdjacencyMap)
       for (let i = 0; i < districts.length; i++) {
         const d      = districts[i];
         const deltaKm2 = deltas[i];
-        achievedKm2 += deltaKm2;
 
         const current = { ...d.land };
         const future  = applyDonors(current, deltaKm2, target, d.area_km2, donor_weights);
@@ -346,12 +350,18 @@ export function createAllocator(districts: District[], adjacency?: AdjacencyMap)
           delta[c] = future[c] - current[c];
         }
 
+        // CRITICAL-2 fix: derive received_km2 from what the target *actually* gained
+        // on the map after rescaling, not the raw QP solution (donor-weight clipping
+        // can leave a gap between the two — they must agree for the summary to be honest).
+        const actualReceived = Math.max(0, delta[target] * d.area_km2);
+        achievedKm2 += actualReceived;
+
         byDistrict.set(d.name, {
           name: d.name,
           current,
           future,
           delta,
-          received_km2: deltaKm2,
+          received_km2: actualReceived,
         });
       }
 

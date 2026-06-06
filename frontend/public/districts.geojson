@@ -12,12 +12,12 @@
         "density": 6779,
         "area_km2": 38.84,
         "land": {
-          "residential": 0.0777,
-          "industrial": 0.0068,
-          "commercial": 0.0042,
-          "green": 0.7511,
-          "educational": 0.042,
-          "other": 0.1182
+          "residential": 0.3144,
+          "industrial": 0.0275,
+          "commercial": 0.0168,
+          "green": 0.2119,
+          "educational": 0.1702,
+          "other": 0.2592
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.414
@@ -4517,12 +4517,12 @@
         "density": 15791,
         "area_km2": 10.56,
         "land": {
-          "residential": 0.1395,
+          "residential": 0.3709,
           "industrial": 0.0,
-          "commercial": 0.0339,
-          "green": 0.5626,
-          "educational": 0.0734,
-          "other": 0.1906
+          "commercial": 0.0902,
+          "green": 0.2118,
+          "educational": 0.1951,
+          "other": 0.132
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.608
@@ -7314,12 +7314,12 @@
         "density": 18808,
         "area_km2": 12.55,
         "land": {
-          "residential": 0.1442,
-          "industrial": 0.0016,
-          "commercial": 0.0389,
-          "green": 0.5716,
-          "educational": 0.0624,
-          "other": 0.1813
+          "residential": 0.4282,
+          "industrial": 0.0049,
+          "commercial": 0.1155,
+          "green": 0.1593,
+          "educational": 0.1852,
+          "other": 0.107
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.55
@@ -9515,12 +9515,12 @@
         "density": 29440,
         "area_km2": 17.99,
         "land": {
-          "residential": 0.1275,
-          "industrial": 0.0091,
-          "commercial": 0.0103,
-          "green": 0.6517,
-          "educational": 0.0547,
-          "other": 0.1467
+          "residential": 0.4349,
+          "industrial": 0.031,
+          "commercial": 0.0351,
+          "green": 0.1615,
+          "educational": 0.1867,
+          "other": 0.1507
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.521
@@ -12292,12 +12292,12 @@
         "density": 1021,
         "area_km2": 181.47,
         "land": {
-          "residential": 0.0259,
-          "industrial": 0.0011,
-          "commercial": 0.0024,
-          "green": 0.8068,
-          "educational": 0.0163,
-          "other": 0.1475
+          "residential": 0.2003,
+          "industrial": 0.0085,
+          "commercial": 0.0183,
+          "green": 0.2954,
+          "educational": 0.1258,
+          "other": 0.3517
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.285
@@ -12565,12 +12565,12 @@
         "density": 44458,
         "area_km2": 6.99,
         "land": {
-          "residential": 0.1745,
-          "industrial": 0.0136,
-          "commercial": 0.1036,
-          "green": 0.1404,
-          "educational": 0.1121,
-          "other": 0.4557
+          "residential": 0.2859,
+          "industrial": 0.0223,
+          "commercial": 0.1697,
+          "green": 0.1941,
+          "educational": 0.1837,
+          "other": 0.1443
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.652
@@ -12994,12 +12994,12 @@
         "density": 59704,
         "area_km2": 11.28,
         "land": {
-          "residential": 0.2712,
-          "industrial": 0.0476,
-          "commercial": 0.0358,
-          "green": 0.2838,
-          "educational": 0.0763,
-          "other": 0.2853
+          "residential": 0.4557,
+          "industrial": 0.08,
+          "commercial": 0.0601,
+          "green": 0.1538,
+          "educational": 0.1282,
+          "other": 0.1222
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.538
@@ -16139,12 +16139,12 @@
         "density": 46067,
         "area_km2": 9.36,
         "land": {
-          "residential": 0.2182,
-          "industrial": 0.0251,
-          "commercial": 0.0145,
-          "green": 0.2419,
-          "educational": 0.1148,
-          "other": 0.3856
+          "residential": 0.3515,
+          "industrial": 0.0404,
+          "commercial": 0.0233,
+          "green": 0.1423,
+          "educational": 0.1849,
+          "other": 0.2575
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.611
@@ -17740,12 +17740,12 @@
         "density": 40994,
         "area_km2": 10.02,
         "land": {
-          "residential": 0.2663,
-          "industrial": 0.0168,
-          "commercial": 0.0272,
-          "green": 0.163,
-          "educational": 0.1331,
-          "other": 0.3936
+          "residential": 0.3644,
+          "industrial": 0.0229,
+          "commercial": 0.0372,
+          "green": 0.1372,
+          "educational": 0.182,
+          "other": 0.2563
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.594
@@ -19073,12 +19073,12 @@
         "density": 43730,
         "area_km2": 9.3,
         "land": {
-          "residential": 0.2187,
-          "industrial": 0.0106,
-          "commercial": 0.0115,
-          "green": 0.5422,
-          "educational": 0.0537,
-          "other": 0.1633
+          "residential": 0.5029,
+          "industrial": 0.0243,
+          "commercial": 0.0264,
+          "green": 0.1923,
+          "educational": 0.1235,
+          "other": 0.1306
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.568
@@ -21390,12 +21390,12 @@
         "density": 21246,
         "area_km2": 23.34,
         "land": {
-          "residential": 0.1094,
-          "industrial": 0.0761,
-          "commercial": 0.0061,
-          "green": 0.4176,
-          "educational": 0.0396,
-          "other": 0.3512
+          "residential": 0.3282,
+          "industrial": 0.2283,
+          "commercial": 0.0184,
+          "green": 0.1576,
+          "educational": 0.1188,
+          "other": 0.1488
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.529
@@ -23955,12 +23955,12 @@
         "density": 5168,
         "area_km2": 61.94,
         "land": {
-          "residential": 0.0359,
-          "industrial": 0.0089,
-          "commercial": 0.0022,
-          "green": 0.8585,
-          "educational": 0.0093,
-          "other": 0.0852
+          "residential": 0.2943,
+          "industrial": 0.0732,
+          "commercial": 0.0178,
+          "green": 0.3519,
+          "educational": 0.076,
+          "other": 0.1868
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.422
@@ -30872,12 +30872,12 @@
         "density": 5908,
         "area_km2": 85.8,
         "land": {
-          "residential": 0.0653,
-          "industrial": 0.0258,
-          "commercial": 0.0021,
-          "green": 0.6899,
-          "educational": 0.0249,
-          "other": 0.192
+          "residential": 0.2726,
+          "industrial": 0.1076,
+          "commercial": 0.0086,
+          "green": 0.102,
+          "educational": 0.1039,
+          "other": 0.4054
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.218
@@ -33857,12 +33857,12 @@
         "density": 10082,
         "area_km2": 68.72,
         "land": {
-          "residential": 0.0772,
-          "industrial": 0.0081,
-          "commercial": 0.0049,
-          "green": 0.7526,
-          "educational": 0.0373,
-          "other": 0.1199
+          "residential": 0.3505,
+          "industrial": 0.0368,
+          "commercial": 0.0225,
+          "green": 0.2205,
+          "educational": 0.1692,
+          "other": 0.2006
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.217
@@ -40494,12 +40494,12 @@
         "density": 3771,
         "area_km2": 129.68,
         "land": {
-          "residential": 0.044,
-          "industrial": 0.0092,
-          "commercial": 0.0016,
-          "green": 0.8174,
-          "educational": 0.0138,
-          "other": 0.114
+          "residential": 0.2431,
+          "industrial": 0.0508,
+          "commercial": 0.009,
+          "green": 0.3735,
+          "educational": 0.0762,
+          "other": 0.2474
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.323
@@ -45999,12 +45999,12 @@
         "density": 4825,
         "area_km2": 138.46,
         "land": {
-          "residential": 0.1246,
-          "industrial": 0.093,
-          "commercial": 0.0021,
-          "green": 0.6413,
-          "educational": 0.0144,
-          "other": 0.1246
+          "residential": 0.2539,
+          "industrial": 0.1895,
+          "commercial": 0.0044,
+          "green": 0.3827,
+          "educational": 0.0293,
+          "other": 0.1402
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.148
@@ -52932,12 +52932,12 @@
         "density": 2325,
         "area_km2": 136.12,
         "land": {
-          "residential": 0.0464,
-          "industrial": 0.0105,
-          "commercial": 0.0003,
-          "green": 0.8044,
-          "educational": 0.0132,
-          "other": 0.1252
+          "residential": 0.3055,
+          "industrial": 0.0694,
+          "commercial": 0.0022,
+          "green": 0.3917,
+          "educational": 0.087,
+          "other": 0.1443
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.216
@@ -61441,12 +61441,12 @@
         "density": 2269,
         "area_km2": 136.46,
         "land": {
-          "residential": 0.0682,
-          "industrial": 0.0282,
-          "commercial": 0.0006,
-          "green": 0.7848,
-          "educational": 0.0139,
-          "other": 0.1043
+          "residential": 0.1963,
+          "industrial": 0.0811,
+          "commercial": 0.0018,
+          "green": 0.4526,
+          "educational": 0.04,
+          "other": 0.2282
         },
         "land_source": "raster_2024",
         "ageing_building_share": 0.222

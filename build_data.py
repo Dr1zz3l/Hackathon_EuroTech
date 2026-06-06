@@ -112,13 +112,37 @@ _TC_NAME: Dict[str, str] = {
 #
 # BLU.tif encoding (int8):
 #   tens-digit = Class, ones-digit = Sub-category (matches luhk2024_en.csv order)
-#   0 = sea / background, -128 = nodata → excluded from denominator
+#
+# Denominator = DEVELOPABLE land only.  Excluded from denominator (return None):
+#   0 / -128 : sea / nodata
+#   71–74    : Woodland / Shrubland / Grassland / Mangrove-Wetland (protected country park —
+#              cannot be reallocated, treated like sea)
+#   41–44    : Transport infrastructure (Roads / Railways / Airport / Port Facilities —
+#              fixed infrastructure, not reallocatable)
+#   91       : Reservoirs (protected water supply)
+#
+# All fractions are therefore percentages of DEVELOPABLE area, not total district area.
 # ─────────────────────────────────────────────────────────────
 
+# Pixel codes excluded entirely from the developable-land denominator
+_EXCLUDED = frozenset({
+    0, -128,          # sea / nodata
+    71, 72, 73, 74,   # Woodland / Shrubland / Grassland / Mangrove-Wetland (protected natural)
+    41, 42, 43, 44,   # Roads / Railways / Airport / Port Facilities (fixed transport)
+    91,               # Reservoirs (protected water supply)
+})
+
+# Minimum developable pixels for a district — below this fall back to heuristic
+_MIN_DEV_PIXELS = 500
+
 def _bucket(code: int) -> str | None:
-    """Return the land category bucket for a BLU raster pixel value, or None to exclude."""
-    if code in (0, -128):
-        return None   # sea / nodata — excluded from land-area denominator
+    """Return the land category bucket for a BLU raster pixel value, or None to exclude.
+
+    Returns None for sea, nodata, protected natural land, transport infrastructure,
+    and protected reservoirs — all excluded from the developable-land denominator.
+    """
+    if code in _EXCLUDED:
+        return None
     if code in (1, 2, 3):
         return "residential"    # Private / Public / Rural Settlement
     if code == 11:
@@ -127,38 +151,42 @@ def _bucket(code: int) -> str | None:
         return "industrial"     # Industrial Land / Estates / Warehouse & Open Storage
     if code == 31:
         return "educational"    # Government/Institution/Community (GIC)
-    if code in (32,                         # Open Space & Recreation
-                61, 62,                     # Agriculture / Fish Ponds
-                71, 72, 73, 74):            # Woodland / Shrubland / Grassland / Mangrove-Wetland
-        return "green"
-    # Transport (41-44), other-urban (51-54), barren (81,83), water (91,92) → other
+    if code in (32, 61, 62):
+        return "green"          # Open Space & Recreation / Agriculture / Fish Ponds
+    # Remaining: cemeteries (51), utilities (52), vacant/construction (53), misc (54),
+    #            barren (81,83), streams/nullahs (92) → other
     return "other"
 
 
 # ─────────────────────────────────────────────────────────────
 # §3.3 Heuristic fallback (used only if raster file absent)
+#
+# Priors are fractions of DEVELOPABLE land (same denominator as the raster path):
+# natural land, transport, reservoirs excluded — matching what _bucket produces.
+# Derived from raster_2024 zonal stats as representative estimates.
 # ─────────────────────────────────────────────────────────────
 
 _PRIOR: Dict[str, Tuple[float, ...]] = {
     # (residential, industrial, commercial, green, educational, other)
-    "Central & Western": (0.30, 0.04, 0.28, 0.20, 0.08, 0.10),
-    "Wan Chai":          (0.30, 0.04, 0.30, 0.15, 0.10, 0.11),
-    "Eastern":           (0.38, 0.06, 0.18, 0.18, 0.10, 0.10),
-    "Southern":          (0.20, 0.02, 0.08, 0.50, 0.05, 0.15),
-    "Yau Tsim Mong":     (0.28, 0.06, 0.35, 0.08, 0.08, 0.15),
-    "Sham Shui Po":      (0.35, 0.12, 0.20, 0.10, 0.08, 0.15),
-    "Kowloon City":      (0.34, 0.06, 0.20, 0.14, 0.12, 0.14),
-    "Wong Tai Sin":      (0.40, 0.06, 0.14, 0.14, 0.10, 0.16),
-    "Kwun Tong":         (0.28, 0.22, 0.18, 0.10, 0.08, 0.14),
-    "Kwai Tsing":        (0.28, 0.28, 0.12, 0.14, 0.06, 0.12),
-    "Tsuen Wan":         (0.26, 0.20, 0.10, 0.28, 0.06, 0.10),
-    "Tuen Mun":          (0.30, 0.12, 0.08, 0.34, 0.06, 0.10),
-    "Yuen Long":         (0.26, 0.14, 0.08, 0.38, 0.06, 0.08),
-    "North":             (0.16, 0.06, 0.05, 0.58, 0.04, 0.11),
-    "Tai Po":            (0.18, 0.06, 0.06, 0.56, 0.05, 0.09),
-    "Sha Tin":           (0.30, 0.10, 0.12, 0.30, 0.08, 0.10),
-    "Sai Kung":          (0.10, 0.02, 0.03, 0.72, 0.03, 0.10),
-    "Islands":           (0.08, 0.02, 0.04, 0.76, 0.02, 0.08),
+    # green = open space + agriculture (NOT woodland/shrubland/grassland)
+    "Central & Western": (0.43, 0.01, 0.12, 0.16, 0.19, 0.11),
+    "Wan Chai":          (0.37, 0.00, 0.09, 0.21, 0.20, 0.13),
+    "Eastern":           (0.44, 0.03, 0.04, 0.16, 0.19, 0.15),
+    "Southern":          (0.31, 0.03, 0.02, 0.21, 0.17, 0.26),
+    "Yau Tsim Mong":     (0.29, 0.02, 0.17, 0.19, 0.18, 0.14),
+    "Sham Shui Po":      (0.35, 0.04, 0.02, 0.14, 0.19, 0.26),
+    "Kowloon City":      (0.36, 0.02, 0.04, 0.14, 0.18, 0.26),
+    "Wong Tai Sin":      (0.50, 0.02, 0.03, 0.19, 0.12, 0.13),
+    "Kwun Tong":         (0.46, 0.08, 0.06, 0.15, 0.13, 0.12),
+    "Kwai Tsing":        (0.33, 0.23, 0.02, 0.16, 0.12, 0.15),
+    "Tsuen Wan":         (0.29, 0.07, 0.02, 0.35, 0.08, 0.19),
+    "Tuen Mun":          (0.27, 0.11, 0.01, 0.10, 0.10, 0.41),
+    "Yuen Long":         (0.25, 0.19, 0.00, 0.38, 0.03, 0.14),
+    "North":             (0.20, 0.08, 0.00, 0.45, 0.04, 0.23),
+    "Tai Po":            (0.31, 0.07, 0.00, 0.39, 0.09, 0.14),
+    "Sha Tin":           (0.35, 0.04, 0.02, 0.22, 0.17, 0.20),
+    "Sai Kung":          (0.24, 0.05, 0.01, 0.37, 0.08, 0.25),
+    "Islands":           (0.20, 0.01, 0.02, 0.30, 0.13, 0.35),
 }
 
 
@@ -228,8 +256,11 @@ def land_from_raster(boundary_features: list) -> Dict[str, dict]:
                     pixel_totals[bkt] = pixel_totals.get(bkt, 0) + c
 
             total_land = sum(pixel_totals.values())
-            if total_land == 0:
-                print(f"  WARNING: {census_key} — zero classified pixels, using heuristic")
+            if total_land < _MIN_DEV_PIXELS:
+                if total_land > 0:
+                    print(f"  WARNING: {census_key} — only {total_land} developable pixels (< {_MIN_DEV_PIXELS}), using heuristic")
+                else:
+                    print(f"  WARNING: {census_key} — zero developable pixels, using heuristic")
                 # Fallback to heuristic for this one district
                 r, i_, c_, g, e, o = _density_nudge(_PRIOR[census_key], CENSUS[census_key][3])
                 result[census_key] = {
