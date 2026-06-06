@@ -31,12 +31,15 @@ import { buildExplainPayload, explainScore } from '../lib/llm'
 // Land-use palette — keep in sync with MapView + tailwind.config theme.colors.land
 // ---------------------------------------------------------------------------
 const LAND_COLOURS: Record<string, string> = {
-  residential: '#ff0080',
-  industrial:  '#7928ca',
-  commercial:  '#f5a623',
-  green:       '#50e3c2',
-  educational: '#0070f3',
-  other:       '#a1a1a1',
+  residential:    '#ff0080',
+  industrial:     '#7928ca',
+  commercial:     '#f5a623',
+  agricultural:   '#a3c644',
+  recreational:   '#50e3c2',
+  institutional:  '#0070f3',
+  misc:           '#a1a1a1',
+  infrastructure: '#6b7280',
+  protected:      '#1d8a4e',
 }
 
 // ---------------------------------------------------------------------------

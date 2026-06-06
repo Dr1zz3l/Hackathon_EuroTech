@@ -32,7 +32,7 @@ import type { Scenario } from './types';
 /** Green HK 2050 — headroom + area dominant (AHP CR = 0.0199). Stage 3: adjacency 0.18 (green corridors). */
 const greenHk2050: Scenario = {
   id:              'green_hk_2050',
-  target:          'green',
+  target:          'recreational',
   weights: {
     displacement: 0.1377,
     age:          0.1099,
@@ -68,7 +68,7 @@ const industrialGrowth: Scenario = {
 /** Education Hub — headroom dominant (AHP CR = 0.0206). Stage 3: adjacency 0.18 (institutional clusters). */
 const educationHub: Scenario = {
   id:              'education_hub',
-  target:          'educational',
+  target:          'institutional',
   weights: {
     displacement: 0.1293,
     age:          0.098,

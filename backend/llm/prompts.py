@@ -25,7 +25,7 @@ PARSE_TOOL: dict = {
         "properties": {
             "target": {
                 "type": "string",
-                "enum": ["residential", "industrial", "commercial", "green", "educational"],
+                "enum": ["residential", "industrial", "commercial", "agricultural", "recreational", "institutional"],
                 "description": "Which land-use category is the primary planning target.",
             },
             "goal_delta": {
@@ -47,17 +47,18 @@ PARSE_TOOL: dict = {
                     "2.0 = strongly preferred donor, "
                     "0.0–0.4 = de-emphasised, 0.0 = fully protected (never shrinks). "
                     "Only include keys where you want to override the default (1.0). "
-                    "The target category and 'other' (transport/water) are never donors regardless. "
+                    "The target category and frozen categories (misc, infrastructure, protected) are never donors. "
                     "Examples: 'primarily from residential' → {residential: 2.0}; "
-                    "'no green harmed' → {green: 0.0}; "
-                    "'only trade industrial' → {industrial: 2.0, residential: 0.0, commercial: 0.0, educational: 0.0}."
+                    "'no recreational harmed' → {recreational: 0.0}; "
+                    "'only trade industrial' → {industrial: 2.0, residential: 0.0, commercial: 0.0, institutional: 0.0}."
                 ),
                 "properties": {
-                    "residential": {"type": "number", "minimum": 0},
-                    "industrial":  {"type": "number", "minimum": 0},
-                    "commercial":  {"type": "number", "minimum": 0},
-                    "green":       {"type": "number", "minimum": 0},
-                    "educational": {"type": "number", "minimum": 0},
+                    "residential":   {"type": "number", "minimum": 0},
+                    "industrial":    {"type": "number", "minimum": 0},
+                    "commercial":    {"type": "number", "minimum": 0},
+                    "agricultural":  {"type": "number", "minimum": 0},
+                    "recreational":  {"type": "number", "minimum": 0},
+                    "institutional": {"type": "number", "minimum": 0},
                 },
                 "additionalProperties": False,
             },
@@ -140,19 +141,23 @@ additions is taken from **donor categories** — the target grows, donors shrink
 - `donor_weights`: how much each non-target category contributes.
   - 1.0 = donates proportionally to its current area (default / neutral).
   - 2.0 = strongly preferred donor (e.g. 'primarily from residential').
-  - 0.0 = fully protected — this category NEVER shrinks ('no green harmed').
+  - 0.0 = fully protected — this category NEVER shrinks ('no recreational harmed').
   - Only include keys you need to override; missing = 1.0.
+  - Frozen categories (misc, infrastructure, protected) are never donors; omit them.
 - `cluster_strength`: 0 = spread evenly; 1.5 = concentrate near existing clusters.
 
 ## Land-use targets
-Pick exactly one: residential, industrial, commercial, green, educational.
+Pick exactly one: residential, industrial, commercial, agricultural, recreational, institutional.
+- "green space" / "parks" / "open space" → recreational
+- "farmland" / "agriculture" / "fish ponds" → agricultural
+- "schools" / "hospitals" / "GIC" / "community" → institutional
 
 ## Rules
 - Output ONLY via the set_scenario tool — never rank or score districts yourself.
 - Parse the magnitude explicitly ('10% more' → 0.10); default goal_delta = 0.10.
 - Map 'no X harmed' / 'protect X' → donor_weights.X = 0.0.
 - Map 'primarily from X' / 'mainly trade X' → donor_weights.X = 2.0.
-- Green corridors and educational clusters → cluster_strength = 1.5.
+- Recreational/institutional corridors and clusters → cluster_strength = 1.5.
 - Industrial parks, broad urban renewal → cluster_strength = 0.8.
 - Never invent district-specific data.
 - The label must be in {locale} (Traditional Chinese if yue, English if en).

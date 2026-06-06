@@ -48,7 +48,11 @@ OUTPUT_PATH   = ROOT / "frontend/public/neighbourhoods.geojson"
 SIMPLIFY_TOL    = 1e-4   # degrees (≈11 m) — keeps the payload small for the web
 _MIN_DEV_PIXELS = 500    # below this → use parent-district land as heuristic
 
-CATEGORIES = ["residential", "industrial", "commercial", "green", "educational", "other"]
+CATEGORIES = [
+    "residential", "industrial", "commercial",
+    "agricultural", "recreational", "institutional",
+    "misc", "infrastructure", "protected",
+]
 
 # ─────────────────────────────────────────────────────────────
 # TC names for display (mirrors build_data.py)
@@ -80,10 +84,8 @@ _TC_NAME: Dict[str, str] = {
 # ─────────────────────────────────────────────────────────────
 
 _EXCLUDED = frozenset({
-    0, -128,
-    71, 72, 73, 74,   # protected natural: Woodland / Shrubland / Grassland / Mangrove
-    41, 42, 43, 44,   # fixed transport: Roads / Railways / Airport / Port
-    91,               # Reservoirs (protected water supply)
+    0, -128,   # sea / nodata
+    81,        # Badland — geologically unstable, ignored everywhere
 })
 
 
@@ -92,16 +94,24 @@ def _bucket(code: int) -> Optional[str]:
     if code in _EXCLUDED:
         return None
     if code in (1, 2, 3):
-        return "residential"
+        return "residential"    # Private / Public / Rural Settlement
     if code == 11:
-        return "commercial"
+        return "commercial"     # Commercial/Business & Office
     if code in (21, 22, 23):
-        return "industrial"
+        return "industrial"     # Industrial Land / Estates / Warehouse & Open Storage
     if code == 31:
-        return "educational"
-    if code in (32, 61, 62):
-        return "green"
-    return "other"
+        return "institutional"  # Government/Institution/Community (GIC)
+    if code in (32, 83, 92):
+        return "recreational"   # Open Space & Recreation / Rocky Shore / Streams
+    if code in (61, 62):
+        return "agricultural"   # Agricultural Land / Fish Ponds & Gei Wais
+    if code in (51, 52, 53, 54):
+        return "misc"           # Cemeteries / Utilities / Vacant & Construction / Other built-up
+    if code in (41, 42, 43, 44):
+        return "infrastructure" # Roads & Transport / Railways / Airport / Port Facilities
+    if code in (71, 72, 73, 74, 91):
+        return "protected"      # Woodland / Shrubland / Grassland / Wetland / Reservoirs
+    return "misc"
 
 
 # ─────────────────────────────────────────────────────────────
@@ -249,7 +259,7 @@ def build() -> None:
     print("\n[4/5] Assembling neighbourhood features...")
     header = (
         f"{'TPU':>5}  {'Parent district':24s}  "
-        f"{'src':11s}  res    ind    com    grn    edu    oth"
+        f"{'src':11s}  res    ind    com    agr    rec    ins    mis    inf    prt"
     )
     print(f"  {header}")
     print("  " + "-" * len(header))
@@ -294,8 +304,9 @@ def build() -> None:
             if land is None:
                 # Use parent-district land as best available estimate
                 land = dict(fallback_land.get(parent, {
-                    "residential": 0.33, "industrial": 0.05, "commercial": 0.04,
-                    "green": 0.22, "educational": 0.14, "other": 0.22,
+                    "residential": 0.07, "industrial": 0.02, "commercial": 0.01,
+                    "agricultural": 0.04, "recreational": 0.06, "institutional": 0.05,
+                    "misc": 0.03, "infrastructure": 0.10, "protected": 0.62,
                 }))
                 source = "estimated"
                 n_fallback += 1
@@ -335,9 +346,12 @@ def build() -> None:
                 f"{land['residential']:.3f}  "
                 f"{land['industrial']:.3f}  "
                 f"{land['commercial']:.3f}  "
-                f"{land['green']:.3f}  "
-                f"{land['educational']:.3f}  "
-                f"{land['other']:.3f}"
+                f"{land['agricultural']:.3f}  "
+                f"{land['recreational']:.3f}  "
+                f"{land['institutional']:.3f}  "
+                f"{land['misc']:.3f}  "
+                f"{land['infrastructure']:.3f}  "
+                f"{land['protected']:.3f}"
             )
 
     finally:
@@ -367,10 +381,12 @@ def build() -> None:
     codes = [f["properties"]["tpu_code"] for f in features]
     assert len(set(codes)) == len(codes), "Duplicate tpu_code values!"
 
+    _EXPECTED_LAND_KEYS = set(CATEGORIES)
     for f in features:
         n = f["properties"]["name"]
         land = f["properties"]["land"]
-        assert set(land.keys()) == set(CATEGORIES), f"{n}: unexpected land keys"
+        assert set(land.keys()) == _EXPECTED_LAND_KEYS, \
+            f"{n}: unexpected land keys {set(land.keys())}"
         total = sum(land.values())
         assert abs(total - 1.0) < 0.02, f"{n}: land fractions sum to {total:.4f}"
         assert f["properties"]["parent_district"] != "Unknown", \

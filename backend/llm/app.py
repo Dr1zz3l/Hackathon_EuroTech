@@ -115,8 +115,9 @@ async def parse_goal(req: ParseGoalRequest) -> ParseGoalResponse:
         residential=dw_raw.get("residential"),
         industrial=dw_raw.get("industrial"),
         commercial=dw_raw.get("commercial"),
-        green=dw_raw.get("green"),
-        educational=dw_raw.get("educational"),
+        agricultural=dw_raw.get("agricultural"),
+        recreational=dw_raw.get("recreational"),
+        institutional=dw_raw.get("institutional"),
     )
 
     return ParseGoalResponse(
