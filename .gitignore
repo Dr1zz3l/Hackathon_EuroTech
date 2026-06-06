@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.python-version
+Digital_Terrain_Model_DTM_GEOTIFF/
