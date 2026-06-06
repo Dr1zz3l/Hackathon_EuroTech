@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = "==3.13.9"
 dependencies = [
     "fiona>=1.10.1",
+    "numpy>=2.4.6",
     "pyproj>=3.7.2",
     "pyqt5>=5.15.11",
     "pyvista>=0.48.4",
