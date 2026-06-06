@@ -13,7 +13,18 @@ BUILDINGS_URL = (
     "https://portal.csdi.gov.hk/csdi-webpage/file-api"
     "?dataset_id=landsd_rcd_1637211194312_35158&format=geojson&layer_name=Building"
 )
+LOT_URL = "https://static.csdi.gov.hk/csdi-webpage/download/38b3fa389e8254679beb3646a6c20f80/geojson"
 
+PUBLIC_HOUSING_ESTATES_ESTATES_URL = "https://res.data.gov.hk/api/get-download-file?name=https%3A%2F%2Fwww.housingauthority.gov.hk%2Fdatagovhk%2Fprh-estates.json"
+PUBLIC_HOUSING_ESTATES_COURTS_URL = "https://res.data.gov.hk/api/get-download-file?name=https%3A%2F%2Fwww.housingauthority.gov.hk%2Fdatagovhk%2Fhos-courts.json"
+PUBLIC_HOUSING_ESTATES_SHOPPING_CENTRES_URL = "https://res.data.gov.hk/api/get-download-file?name=https%3A%2F%2Fwww.housingauthority.gov.hk%2Fdatagovhk%2Fshopping-centres.json"
+PUBLIC_HOUSING_ESTATES_FLATTED_FACTORIES_URL = "https://res.data.gov.hk/api/get-download-file?name=https%3A%2F%2Fwww.housingauthority.gov.hk%2Fdatagovhk%2Fflatted-factory.json"
+
+LAND_UTILIZATION_EN_URL = "https://www.pland.gov.hk/pland_en/info_serv/statistic/landu/csv/LUHK2024_English.csv"
+LAND_UTILIZATION_TC_URL = "https://www.pland.gov.hk/pland_en/info_serv/statistic/landu/csv/LUHK2024_TC.csv"
+LAND_UTILIZATION_SC_URL = "https://www.pland.gov.hk/pland_en/info_serv/statistic/landu/csv/LUHK2024_SC.csv"
+
+RASTER_GRID_LAND_UTILIZATION_URL = "https://static.csdi.gov.hk/csdi-webpage/download/ac678c4e9c2d5f018e3964c39a1cbc0c/geotiff"
 
 def download_dtm():
     dtm_files = list(DTM_DIR.glob("*.tif"))
