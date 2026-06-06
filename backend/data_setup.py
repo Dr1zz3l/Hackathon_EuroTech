@@ -1,5 +1,6 @@
 import io
 import re
+import time
 import urllib.request
 import zipfile
 from pathlib import Path
@@ -70,16 +71,26 @@ def _make_request(url: str) -> urllib.request.Request:
     return urllib.request.Request(safe_url, headers={"User-Agent": "Mozilla/5.0"})
 
 
-def _fetch(url: str) -> bytes:
-    buf = io.BytesIO()
-    with urllib.request.urlopen(_make_request(url)) as resp:
-        downloaded = 0
-        while chunk := resp.read(1024 * 1024):
-            buf.write(chunk)
-            downloaded += len(chunk)
-            print(f"\r  {downloaded / 1e6:.1f} MB...", end="", flush=True)
-    print()
-    return buf.getvalue()
+def _fetch(url: str, retries: int = 5, backoff: float = 3.0) -> bytes:
+    last_exc: Exception | None = None
+    for attempt in range(1, retries + 1):
+        try:
+            buf = io.BytesIO()
+            with urllib.request.urlopen(_make_request(url), timeout=60) as resp:
+                downloaded = 0
+                while chunk := resp.read(1024 * 1024):
+                    buf.write(chunk)
+                    downloaded += len(chunk)
+                    print(f"\r  {downloaded / 1e6:.1f} MB...", end="", flush=True)
+            print()
+            return buf.getvalue()
+        except Exception as exc:
+            last_exc = exc
+            if attempt < retries:
+                wait = backoff * attempt
+                print(f"\n  attempt {attempt} failed ({exc}), retrying in {wait:.0f}s...")
+                time.sleep(wait)
+    raise RuntimeError(f"download failed after {retries} attempts") from last_exc
 
 
 def _download_to_file(url: str, dest_path: Path, label: str) -> None:
