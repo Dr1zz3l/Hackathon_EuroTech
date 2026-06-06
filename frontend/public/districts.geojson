@@ -12,14 +12,15 @@
         "density": 6779,
         "area_km2": 38.84,
         "land": {
-          "residential": 0.2,
-          "industrial": 0.02,
-          "commercial": 0.08,
-          "green": 0.5,
-          "educational": 0.05,
-          "other": 0.15
+          "residential": 0.0777,
+          "industrial": 0.0068,
+          "commercial": 0.0042,
+          "green": 0.7511,
+          "educational": 0.042,
+          "other": 0.1182
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.414
       },
       "geometry": {
         "type": "Polygon",
@@ -4516,14 +4517,15 @@
         "density": 15791,
         "area_km2": 10.56,
         "land": {
-          "residential": 0.3,
-          "industrial": 0.04,
-          "commercial": 0.3,
-          "green": 0.15,
-          "educational": 0.1,
-          "other": 0.11
+          "residential": 0.1395,
+          "industrial": 0.0,
+          "commercial": 0.0339,
+          "green": 0.5626,
+          "educational": 0.0734,
+          "other": 0.1906
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.608
       },
       "geometry": {
         "type": "Polygon",
@@ -7312,14 +7314,15 @@
         "density": 18808,
         "area_km2": 12.55,
         "land": {
-          "residential": 0.3,
-          "industrial": 0.04,
-          "commercial": 0.28,
-          "green": 0.2,
-          "educational": 0.08,
-          "other": 0.1
+          "residential": 0.1442,
+          "industrial": 0.0016,
+          "commercial": 0.0389,
+          "green": 0.5716,
+          "educational": 0.0624,
+          "other": 0.1813
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.55
       },
       "geometry": {
         "type": "Polygon",
@@ -9512,14 +9515,15 @@
         "density": 29440,
         "area_km2": 17.99,
         "land": {
-          "residential": 0.38,
-          "industrial": 0.06,
-          "commercial": 0.18,
-          "green": 0.18,
-          "educational": 0.1,
-          "other": 0.1
+          "residential": 0.1275,
+          "industrial": 0.0091,
+          "commercial": 0.0103,
+          "green": 0.6517,
+          "educational": 0.0547,
+          "other": 0.1467
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.521
       },
       "geometry": {
         "type": "Polygon",
@@ -12288,14 +12292,15 @@
         "density": 1021,
         "area_km2": 181.47,
         "land": {
-          "residential": 0.0487,
-          "industrial": 0.0097,
-          "commercial": 0.039,
-          "green": 0.8051,
-          "educational": 0.0195,
-          "other": 0.078
+          "residential": 0.0259,
+          "industrial": 0.0011,
+          "commercial": 0.0024,
+          "green": 0.8068,
+          "educational": 0.0163,
+          "other": 0.1475
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.285
       },
       "geometry": {
         "type": "Polygon",
@@ -12560,14 +12565,15 @@
         "density": 44458,
         "area_km2": 6.99,
         "land": {
-          "residential": 0.3161,
-          "industrial": 0.06,
-          "commercial": 0.3717,
-          "green": 0.0366,
-          "educational": 0.08,
-          "other": 0.1355
+          "residential": 0.1745,
+          "industrial": 0.0136,
+          "commercial": 0.1036,
+          "green": 0.1404,
+          "educational": 0.1121,
+          "other": 0.4557
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.652
       },
       "geometry": {
         "type": "Polygon",
@@ -12988,14 +12994,15 @@
         "density": 59704,
         "area_km2": 11.28,
         "land": {
-          "residential": 0.32,
-          "industrial": 0.22,
-          "commercial": 0.204,
-          "green": 0.052,
-          "educational": 0.08,
-          "other": 0.124
+          "residential": 0.2712,
+          "industrial": 0.0476,
+          "commercial": 0.0358,
+          "green": 0.2838,
+          "educational": 0.0763,
+          "other": 0.2853
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.538
       },
       "geometry": {
         "type": "Polygon",
@@ -16132,14 +16139,15 @@
         "density": 46067,
         "area_km2": 9.36,
         "land": {
-          "residential": 0.39,
-          "industrial": 0.12,
-          "commercial": 0.224,
-          "green": 0.052,
-          "educational": 0.08,
-          "other": 0.134
+          "residential": 0.2182,
+          "industrial": 0.0251,
+          "commercial": 0.0145,
+          "green": 0.2419,
+          "educational": 0.1148,
+          "other": 0.3856
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.611
       },
       "geometry": {
         "type": "Polygon",
@@ -17732,14 +17740,15 @@
         "density": 40994,
         "area_km2": 10.02,
         "land": {
-          "residential": 0.3675,
-          "industrial": 0.06,
-          "commercial": 0.2165,
-          "green": 0.107,
-          "educational": 0.12,
-          "other": 0.129
+          "residential": 0.2663,
+          "industrial": 0.0168,
+          "commercial": 0.0272,
+          "green": 0.163,
+          "educational": 0.1331,
+          "other": 0.3936
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.594
       },
       "geometry": {
         "type": "Polygon",
@@ -19064,14 +19073,15 @@
         "density": 43730,
         "area_km2": 9.3,
         "land": {
-          "residential": 0.4343,
-          "industrial": 0.06,
-          "commercial": 0.1606,
-          "green": 0.0988,
-          "educational": 0.1,
-          "other": 0.1463
+          "residential": 0.2187,
+          "industrial": 0.0106,
+          "commercial": 0.0115,
+          "green": 0.5422,
+          "educational": 0.0537,
+          "other": 0.1633
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.568
       },
       "geometry": {
         "type": "Polygon",
@@ -21380,14 +21390,15 @@
         "density": 21246,
         "area_km2": 23.34,
         "land": {
-          "residential": 0.28,
-          "industrial": 0.28,
-          "commercial": 0.12,
-          "green": 0.14,
-          "educational": 0.06,
-          "other": 0.12
+          "residential": 0.1094,
+          "industrial": 0.0761,
+          "commercial": 0.0061,
+          "green": 0.4176,
+          "educational": 0.0396,
+          "other": 0.3512
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.529
       },
       "geometry": {
         "type": "Polygon",
@@ -23944,14 +23955,15 @@
         "density": 5168,
         "area_km2": 61.94,
         "land": {
-          "residential": 0.26,
-          "industrial": 0.2,
-          "commercial": 0.1,
-          "green": 0.28,
-          "educational": 0.06,
-          "other": 0.1
+          "residential": 0.0359,
+          "industrial": 0.0089,
+          "commercial": 0.0022,
+          "green": 0.8585,
+          "educational": 0.0093,
+          "other": 0.0852
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.422
       },
       "geometry": {
         "type": "Polygon",
@@ -30860,14 +30872,15 @@
         "density": 5908,
         "area_km2": 85.8,
         "land": {
-          "residential": 0.3,
-          "industrial": 0.12,
-          "commercial": 0.08,
-          "green": 0.34,
-          "educational": 0.06,
-          "other": 0.1
+          "residential": 0.0653,
+          "industrial": 0.0258,
+          "commercial": 0.0021,
+          "green": 0.6899,
+          "educational": 0.0249,
+          "other": 0.192
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.218
       },
       "geometry": {
         "type": "Polygon",
@@ -33844,14 +33857,15 @@
         "density": 10082,
         "area_km2": 68.72,
         "land": {
-          "residential": 0.3,
-          "industrial": 0.1,
-          "commercial": 0.12,
-          "green": 0.3,
-          "educational": 0.08,
-          "other": 0.1
+          "residential": 0.0772,
+          "industrial": 0.0081,
+          "commercial": 0.0049,
+          "green": 0.7526,
+          "educational": 0.0373,
+          "other": 0.1199
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.217
       },
       "geometry": {
         "type": "Polygon",
@@ -40480,14 +40494,15 @@
         "density": 3771,
         "area_km2": 129.68,
         "land": {
-          "residential": 0.1,
-          "industrial": 0.02,
-          "commercial": 0.03,
-          "green": 0.72,
-          "educational": 0.03,
-          "other": 0.1
+          "residential": 0.044,
+          "industrial": 0.0092,
+          "commercial": 0.0016,
+          "green": 0.8174,
+          "educational": 0.0138,
+          "other": 0.114
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.323
       },
       "geometry": {
         "type": "Polygon",
@@ -45984,14 +45999,15 @@
         "density": 4825,
         "area_km2": 138.46,
         "land": {
-          "residential": 0.26,
-          "industrial": 0.14,
-          "commercial": 0.08,
-          "green": 0.38,
-          "educational": 0.06,
-          "other": 0.08
+          "residential": 0.1246,
+          "industrial": 0.093,
+          "commercial": 0.0021,
+          "green": 0.6413,
+          "educational": 0.0144,
+          "other": 0.1246
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.148
       },
       "geometry": {
         "type": "Polygon",
@@ -52916,14 +52932,15 @@
         "density": 2325,
         "area_km2": 136.12,
         "land": {
-          "residential": 0.168,
-          "industrial": 0.053,
-          "commercial": 0.0597,
-          "green": 0.5799,
-          "educational": 0.0498,
-          "other": 0.0896
+          "residential": 0.0464,
+          "industrial": 0.0105,
+          "commercial": 0.0003,
+          "green": 0.8044,
+          "educational": 0.0132,
+          "other": 0.1252
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.216
       },
       "geometry": {
         "type": "Polygon",
@@ -61424,14 +61441,15 @@
         "density": 2269,
         "area_km2": 136.46,
         "land": {
-          "residential": 0.1471,
-          "industrial": 0.0524,
-          "commercial": 0.0498,
-          "green": 0.6014,
-          "educational": 0.0398,
-          "other": 0.1095
+          "residential": 0.0682,
+          "industrial": 0.0282,
+          "commercial": 0.0006,
+          "green": 0.7848,
+          "educational": 0.0139,
+          "other": 0.1043
         },
-        "land_source": "estimated"
+        "land_source": "raster_2024",
+        "ageing_building_share": 0.222
       },
       "geometry": {
         "type": "Polygon",
