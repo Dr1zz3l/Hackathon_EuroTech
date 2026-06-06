@@ -1,0 +1,248 @@
+/**
+ * DetailPanel — slide-in drawer showing:
+ *   • Land-use donut (hand-rolled SVG)
+ *   • Demographics
+ *   • Viability score + top-3 reasons  (only when a scenario is active)
+ *   • Provenance badge (land_source)
+ */
+
+import type { District, Scenario, ScoreResult, ScoreTerm } from '../types'
+import { useI18n } from '../context/I18nContext'
+
+// ---------------------------------------------------------------------------
+// Colour map (mirrors MapView + Tailwind config)
+// ---------------------------------------------------------------------------
+const LAND_COLOURS: Record<string, string> = {
+  residential: '#f87171',
+  industrial:  '#a78bfa',
+  commercial:  '#fb923c',
+  green:       '#4ade80',
+  educational: '#60a5fa',
+  other:       '#94a3b8',
+}
+
+// ---------------------------------------------------------------------------
+// SVG donut helper
+// ---------------------------------------------------------------------------
+
+interface Slice {
+  category: string
+  fraction: number
+  colour: string
+}
+
+function DonutChart({ district }: { district: District }) {
+  const { t } = useI18n()
+  const cx = 60, cy = 60, r = 46, inner = 28
+  const total = Object.values(district.land).reduce((a, b) => a + b, 0)
+  const slices: Slice[] = (Object.entries(district.land) as [string, number][])
+    .filter(([, v]) => v > 0)
+    .map(([k, v]) => ({ category: k, fraction: v / total, colour: LAND_COLOURS[k] ?? '#94a3b8' }))
+
+  let angle = -Math.PI / 2  // start at 12 o'clock
+  const paths = slices.map(sl => {
+    const start = angle
+    const sweep = sl.fraction * 2 * Math.PI
+    angle += sweep
+    const x1 = cx + r * Math.cos(start)
+    const y1 = cy + r * Math.sin(start)
+    const x2 = cx + r * Math.cos(angle)
+    const y2 = cy + r * Math.sin(angle)
+    const xi1 = cx + inner * Math.cos(start)
+    const yi1 = cy + inner * Math.sin(start)
+    const xi2 = cx + inner * Math.cos(angle)
+    const yi2 = cy + inner * Math.sin(angle)
+    const large = sweep > Math.PI ? 1 : 0
+
+    const d = [
+      `M ${x1} ${y1}`,
+      `A ${r} ${r} 0 ${large} 1 ${x2} ${y2}`,
+      `L ${xi2} ${yi2}`,
+      `A ${inner} ${inner} 0 ${large} 0 ${xi1} ${yi1}`,
+      'Z',
+    ].join(' ')
+
+    return <path key={sl.category} d={d} fill={sl.colour} stroke="#1e293b" strokeWidth="1" />
+  })
+
+  return (
+    <div className="flex gap-3 items-start">
+      <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
+        {paths}
+      </svg>
+      <div className="flex flex-col gap-1 text-xs mt-1">
+        {slices.map(sl => (
+          <div key={sl.category} className="flex items-center gap-1.5">
+            <span
+              className="inline-block w-2.5 h-2.5 rounded-sm"
+              style={{ background: sl.colour }}
+            />
+            <span className="text-slate-300">
+              {t(`land.${sl.category}`)}
+            </span>
+            <span className="text-slate-400 ml-auto pl-2">
+              {(sl.fraction * 100).toFixed(1)}%
+            </span>
+          </div>
+        ))}
+      </div>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Score bar
+// ---------------------------------------------------------------------------
+
+function ScoreBar({ score }: { score: number }) {
+  const pct = Math.round(score * 100)
+  const colour = score < 0.4 ? '#93c5fd' : score < 0.65 ? '#fde68a' : '#ef4444'
+  return (
+    <div className="flex items-center gap-2">
+      <div className="flex-1 h-2.5 rounded-full bg-slate-700 overflow-hidden">
+        <div
+          className="h-full rounded-full transition-all duration-300"
+          style={{ width: `${pct}%`, background: colour }}
+        />
+      </div>
+      <span className="text-sm font-bold tabular-nums" style={{ color: colour }}>
+        {pct}
+      </span>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Reason row
+// ---------------------------------------------------------------------------
+
+function ReasonRow({ term, t }: { term: ScoreTerm; t: (k: string) => string }) {
+  const pct = Math.round(term.contribution * 100)
+  return (
+    <div className="flex items-start gap-2 text-xs">
+      <span
+        className="mt-0.5 shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-amber-400"
+      />
+      <span className="text-slate-300 flex-1">
+        {t(`reason.${term.key}`).replace('{value}', term.display_value)}
+      </span>
+      <span className="tabular-nums text-slate-500 text-[10px]">+{pct}</span>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Main component
+// ---------------------------------------------------------------------------
+
+interface DetailPanelProps {
+  district: District
+  scenario: Scenario | null
+  scoreResult: ScoreResult | null
+  onClose: () => void
+}
+
+export default function DetailPanel({
+  district,
+  scenario,
+  scoreResult,
+  onClose,
+}: DetailPanelProps) {
+  const { t, locale } = useI18n()
+  const displayName = locale === 'yue' ? district.name_tc : district.name
+
+  return (
+    <div className="flex flex-col h-full bg-slate-900 text-white overflow-y-auto">
+      {/* Header */}
+      <div className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700 shrink-0">
+        <div>
+          <h2 className="text-base font-semibold leading-tight">{displayName}</h2>
+          {scenario && (
+            <p className="text-xs text-slate-400 mt-0.5">
+              {t(scenario.label_key)} · {scenario.horizon_year}
+            </p>
+          )}
+        </div>
+        <button
+          onClick={onClose}
+          className="text-slate-400 hover:text-white text-xl leading-none px-1"
+          aria-label={t('close')}
+        >
+          ×
+        </button>
+      </div>
+
+      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+
+        {/* Viability score — only when a scenario is active */}
+        {scenario && scoreResult && (
+          <section>
+            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+              {t('panel.score')}
+            </h3>
+            <ScoreBar score={scoreResult.score} />
+            <p className="text-[10px] text-slate-500 mt-1.5 leading-tight">
+              {t('panel.score.disclaimer')}
+            </p>
+
+            {/* Top reasons */}
+            <div className="mt-3 space-y-2">
+              <h4 className="text-xs font-medium text-slate-400">
+                {t('panel.reasons.title')}
+              </h4>
+              {scoreResult.top_reasons.map(term => (
+                <ReasonRow key={term.key} term={term} t={t} />
+              ))}
+            </div>
+          </section>
+        )}
+
+        {/* Land-use donut */}
+        <section>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            {t('panel.land.title')}
+          </h3>
+          <DonutChart district={district} />
+          {/* Provenance badge — never hidden */}
+          <p className={`text-[10px] mt-2 ${
+            district.land_source === 'estimated'
+              ? 'text-amber-400'
+              : 'text-green-400'
+          }`}>
+            {t(`panel.land.source.${district.land_source}`)}
+          </p>
+        </section>
+
+        {/* Demographics */}
+        <section>
+          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+            {t('panel.demographics')}
+          </h3>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+            <StatRow label={t('panel.pop')} value={district.pop.toLocaleString('en-HK')} />
+            <StatRow label={t('panel.area')} value={`${district.area_km2.toFixed(1)} km²`} />
+            <StatRow
+              label={t('panel.density')}
+              value={`${district.density.toLocaleString('en-HK')} /km²`}
+            />
+            <StatRow label={t('panel.median_age')} value={district.median_age.toFixed(1)} />
+            <StatRow
+              label={t('panel.pct_over65')}
+              value={`${district.pct_over65.toFixed(1)}%`}
+            />
+          </div>
+        </section>
+
+      </div>
+    </div>
+  )
+}
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <>
+      <span className="text-slate-400">{label}</span>
+      <span className="text-slate-200 font-medium tabular-nums">{value}</span>
+    </>
+  )
+}

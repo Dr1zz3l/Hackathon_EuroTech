@@ -1,0 +1,48 @@
+{
+  "app.title": "香港各區發展可行性",
+  "app.subtitle": "智慧城市規劃 · 18區",
+
+  "scenario.none.label": "預設檢視",
+  "scenario.green_hk_2050.label": "綠化香港2050",
+  "scenario.green_hk_2050.description": "2050年增加20%綠化空間 — 善用低壓力可轉換土地",
+  "scenario.industrial_growth.label": "工業發展",
+  "scenario.industrial_growth.description": "增加15%工業用地 — 優先考慮周邊低密度地區",
+  "scenario.education_hub.label": "教育樞紐",
+  "scenario.education_hub.description": "在現有機構群附近增加10%教育設施",
+  "scenario.urban_renewal.label": "市區重建",
+  "scenario.urban_renewal.description": "重建老化低密度住宅存量",
+
+  "map.legend.title": "主要土地用途",
+  "map.legend.viability": "可行性評分",
+  "map.legend.low": "低",
+  "map.legend.high": "高",
+
+  "land.residential": "住宅",
+  "land.industrial": "工業",
+  "land.commercial": "商業",
+  "land.green": "綠化／休憩空間",
+  "land.educational": "教育／政府機構",
+  "land.other": "其他（交通／水域）",
+
+  "panel.score": "可行性評分",
+  "panel.score.disclaimer": "示意性決策支援模型 — 並非官方規劃評估。",
+  "panel.land.title": "土地用途分佈",
+  "panel.land.source.estimated": "⚠ 土地用途數據：估算（啟發式）",
+  "panel.land.source.raster_2024": "土地用途數據：規劃署2024年柵格數據",
+  "panel.demographics": "人口統計",
+  "panel.pop": "人口",
+  "panel.density": "密度",
+  "panel.area": "面積",
+  "panel.median_age": "中位年齡",
+  "panel.pct_over65": "65歲或以上",
+  "panel.reasons.title": "評分主要原因",
+
+  "reason.headroom": "現時{category}僅佔{pct}% → 有增長空間",
+  "reason.large_area": "大型地區（{value}）→ 整體影響力高",
+  "reason.low_density": "密度較低（{value}）→ 遷移影響較少",
+  "reason.age_factor": "{value}為65歲或以上 → 遷移敏感度信號",
+  "reason.ageing_stock": "{value}為老化樓宇 → 重建候選地區",
+
+  "lang.toggle": "EN",
+  "close": "關閉"
+}

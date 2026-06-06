@@ -1,0 +1,48 @@
+{
+  "app.title": "HK District Viability",
+  "app.subtitle": "Smart City Planning · 18 Districts",
+
+  "scenario.none.label": "Default view",
+  "scenario.green_hk_2050.label": "Green HK 2050",
+  "scenario.green_hk_2050.description": "+20% green space by 2050 — convertible low-pressure land",
+  "scenario.industrial_growth.label": "Industrial Growth",
+  "scenario.industrial_growth.description": "+15% industrial — favour peripheral lower-density districts",
+  "scenario.education_hub.label": "Education Hub",
+  "scenario.education_hub.description": "+10% educational capacity near institutional clusters",
+  "scenario.urban_renewal.label": "Urban Renewal",
+  "scenario.urban_renewal.description": "Renew ageing low-density residential stock",
+
+  "map.legend.title": "Dominant land use",
+  "map.legend.viability": "Viability score",
+  "map.legend.low": "Low",
+  "map.legend.high": "High",
+
+  "land.residential": "Residential",
+  "land.industrial": "Industrial",
+  "land.commercial": "Commercial",
+  "land.green": "Green / Open Space",
+  "land.educational": "Educational / GIC",
+  "land.other": "Other (transport / water)",
+
+  "panel.score": "Viability score",
+  "panel.score.disclaimer": "Illustrative decision-support model — not an official planning assessment.",
+  "panel.land.title": "Land-use breakdown",
+  "panel.land.source.estimated": "⚠ Land-use data: estimated (heuristic)",
+  "panel.land.source.raster_2024": "Land-use data: Planning Dept raster 2024",
+  "panel.demographics": "Demographics",
+  "panel.pop": "Population",
+  "panel.density": "Density",
+  "panel.area": "Area",
+  "panel.median_age": "Median age",
+  "panel.pct_over65": "Aged 65+",
+  "panel.reasons.title": "Top reasons for this score",
+
+  "reason.headroom": "Only {pct}% {category} today → room to grow",
+  "reason.large_area": "Large district ({value}) → high aggregate impact",
+  "reason.low_density": "Lower density ({value}) → less displacement",
+  "reason.age_factor": "{value} aged 65+ → displacement-sensitivity signal",
+  "reason.ageing_stock": "{value} ageing building stock → renewal candidate",
+
+  "lang.toggle": "繁中",
+  "close": "Close"
+}
