@@ -44,5 +44,13 @@
   "reason.ageing_stock": "{value} → 重建候選地區",
 
   "lang.toggle": "EN",
-  "close": "關閉"
+  "close": "關閉",
+
+  "goal.placeholder": "輸入規劃目標，例如「增加新界綠化空間」",
+  "goal.submit": "分析",
+  "goal.loading": "分析中…",
+  "goal.error": "未能連接AI規劃助手 — 請嘗試以下預設方案。",
+
+  "panel.ai_summary.title": "AI 摘要",
+  "panel.ai_summary.loading": "正在生成解說…"
 }

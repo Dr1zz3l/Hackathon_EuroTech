@@ -17,6 +17,7 @@ import type { District, Scenario, ScoreResult, Scorer } from './types'
 
 import MapView from './components/MapView'
 import ScenarioPanel from './components/ScenarioPanel'
+import GoalInput from './components/GoalInput'
 import DetailPanel from './components/DetailPanel'
 import MapLegend from './components/MapLegend'
 import LanguageToggle from './components/LanguageToggle'
@@ -108,6 +109,9 @@ function AppInner() {
         onSelect={setActiveScenario}
       />
 
+      {/* Free-text goal input (Stage 2 LLM) */}
+      <GoalInput onScenario={setActiveScenario} />
+
       {/* Map + panels */}
       <div className="flex flex-1 overflow-hidden">
         {/* Map — full width, with legend overlay */}
@@ -124,7 +128,10 @@ function AppInner() {
           {/* Active scenario description badge */}
           {activeScenario && (
             <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-amber-400/90 text-slate-900 text-[11px] font-medium px-3 py-1 rounded-full shadow pointer-events-none whitespace-nowrap">
-              {activeScenario.horizon_year} · {SCENARIOS.find(s => s.id === activeScenario.id)?.id.replace(/_/g, ' ')}
+              {activeScenario.horizon_year} ·{' '}
+              {activeScenario.custom_label
+                ?? SCENARIOS.find(s => s.id === activeScenario.id)?.id.replace(/_/g, ' ')
+                ?? activeScenario.id}
             </div>
           )}
         </div>

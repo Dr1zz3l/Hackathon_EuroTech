@@ -87,7 +87,9 @@ export type ScenarioId =
   | 'green_hk_2050'
   | 'industrial_growth'
   | 'education_hub'
-  | 'urban_renewal';
+  | 'urban_renewal'
+  /** Stage 2 — synthetic scenario built from a free-text LLM goal. */
+  | 'custom';
 
 /**
  * A pre-defined planning scenario.
@@ -105,6 +107,11 @@ export interface Scenario {
   description_key: string;
   /** Target completion year shown in the UI. */
   horizon_year:    number;
+  /**
+   * Stage 2 — display label for a custom/LLM-generated scenario.
+   * Preset scenarios leave this undefined; the `label_key` i18n path is used instead.
+   */
+  custom_label?:   string;
 }
 
 // ------------------------------------------------------------
