@@ -12,16 +12,17 @@ def main() -> None:
     parser.add_argument(
         "--area", nargs=4, type=float, metavar=("W", "S", "E", "N"),
         default=list(DEFAULT_AREA),
-        help="WGS84 bbox to crop (default: Wong Tai Sin / Lion Rock)"
+        help="WGS84 bbox to crop (default: Wong Tai Sin / Lion Rock)",
     )
     parser.add_argument("--full-map", action="store_true", help="View full HK map instead of cropped area")
+    parser.add_argument("--buildings", action="store_true", help="Overlay building footprints on the terrain")
     args = parser.parse_args()
 
     setup()
 
     if args.backend_vis:
         area = None if args.full_map else tuple(args.area)
-        run_viewer(downsample_factor=args.downsample, z_scale=args.zscale, area=area)
+        run_viewer(downsample_factor=args.downsample, z_scale=args.zscale, area=area, show_buildings=args.buildings)
 
 
 if __name__ == "__main__":

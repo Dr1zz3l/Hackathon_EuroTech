@@ -1,3 +1,4 @@
+from .buildings import buildings_to_mesh, load_buildings_for_area
 from .cli import run_viewer
 from .layers import (
     ScalarLayer,
@@ -15,6 +16,8 @@ __all__ = [
     "load_dtm",
     "load_dtm_area",
     "TerrainArray",
+    "load_buildings_for_area",
+    "buildings_to_mesh",
     "ScalarLayer",
     "elevation_layer",
     "flood_depth_layer",

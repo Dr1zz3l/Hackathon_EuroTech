@@ -80,6 +80,35 @@ class TerrainViewer:
         if name in self._active_layers:
             self.plotter.remove_actor(self._active_layers.pop(name))
 
+    def add_buildings(
+        self,
+        west_lon: float,
+        south_lat: float,
+        east_lon: float,
+        north_lat: float,
+    ) -> None:
+        from .buildings import load_buildings_for_area, buildings_to_mesh
+
+        print("Loading buildings...")
+        buildings = load_buildings_for_area(west_lon, south_lat, east_lon, north_lat)
+        print(f"  {len(buildings)} buildings found in area")
+        if not buildings:
+            return
+
+        mesh = buildings_to_mesh(buildings, self._terrain, z_scale=self._z_scale)
+        if mesh is None:
+            print("  No valid building geometry to render")
+            return
+
+        self.plotter.add_mesh(
+            mesh,
+            color="lightgray",
+            opacity=0.85,
+            lighting=True,
+            show_edges=False,
+        )
+        print("  Buildings added to viewer")
+
     def animate_flood(
         self,
         depth_frames: list[np.ndarray],

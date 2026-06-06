@@ -13,6 +13,7 @@ def run_viewer(
     downsample_factor: int = 10,
     z_scale: float = 2.0,
     area: tuple[float, float, float, float] | None = None,
+    show_buildings: bool = False,
 ) -> None:
     if area is not None:
         w, s, e, n = area
@@ -26,6 +27,12 @@ def run_viewer(
 
     viewer = TerrainViewer(terrain, z_scale=z_scale)
     viewer.show()
+
+    if show_buildings and area is not None:
+        viewer.add_buildings(*area)
+    elif show_buildings:
+        print("Note: --buildings only applies when --area is set (or default area mode)")
+
     print("Viewer open. Close the window to exit.")
     viewer.plotter.app.exec()
 
@@ -37,11 +44,12 @@ def main() -> None:
     parser.add_argument("--dtm", type=Path, default=DTM_PATH, help="Path to DTM GeoTIFF")
     parser.add_argument(
         "--area", nargs=4, type=float, metavar=("W", "S", "E", "N"),
-        help="Crop to WGS84 bbox instead of loading full map (e.g. --area 114.185 22.335 114.205 22.355)"
+        help="Crop to WGS84 bbox instead of loading full map (e.g. --area 114.185 22.335 114.205 22.355)",
     )
+    parser.add_argument("--buildings", action="store_true", help="Overlay building footprints (requires --area or default area mode)")
     args = parser.parse_args()
     area = tuple(args.area) if args.area else None
-    run_viewer(args.dtm, args.downsample, args.zscale, area=area)
+    run_viewer(args.dtm, args.downsample, args.zscale, area=area, show_buildings=args.buildings)
 
 
 if __name__ == "__main__":
