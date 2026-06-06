@@ -103,6 +103,9 @@ Data prep (Python, run once, offline) — NOT shipped to the browser
 
 ### 3.2 REAL datasets — confirmed, free, downloadable
 
+**Available Data** - Already downloaded
+Extractor file found in ../backend/data_setup.py, data in ../data/
+
 **Boundaries (Core)** — Home Affairs Dept
 `https://www.had.gov.hk/psi/hong-kong-administrative-boundaries/hksar_18_district_boundary.json`
 One file, 18 polygons, EN + TC names, WGS84 lat/long.
