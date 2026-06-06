@@ -1,344 +1,164 @@
-# AGENTS.md
+# CLAUDE.md
 
 ## Project Overview
 
-We are building a two-day hackathon MVP for predicting sewage clogging, drainage overload, and flood-related city infrastructure issues during typhoons and heavy rainfall.
+**EuroTech × HKTE Hackathon, Munich — Smart City track**
 
-## Branch Workflow
+An interactive map of Hong Kong's 18 administrative districts that takes a city-planning goal (e.g. "+20% green space by 2050") and ranks which districts can meet it with the most spare capacity and the least displacement — with transparent, explainable reasons for every recommendation.
 
-We will work with three layers of branches:
-
-* `main` branch for stable, integrated work
-* `frontend` and `backend` branches for the two primary workstreams
-* Feature branches created from either `frontend` or `backend` for focused changes
-
-Suggested flow:
-
-1. Keep `main` protected and stable
-2. Merge completed frontend work into `frontend`
-3. Merge completed backend work into `backend`
-4. Create short-lived feature branches from the relevant workstream branch
-5. Merge feature branches back into `frontend` or `backend`
-6. Merge `frontend` and `backend` into `main` when ready for integration
-
-The target setting is cities such as Hong Kong and other cities in the Greater Bay Area.
-
-The MVP should show a simple map-based mobile web interface where users can:
-
-* Browse a city map
-* Search for a location
-* See estimated flood / sewage clogging risk
-* Switch between English and Cantonese
-
-The system will use available weather data, historical flood data, and open city datasets where possible.
+> Full specification: `docs/MASTER_BUILD_DOC.md` — read it before writing any code.
 
 ---
 
-## MVP Goal
+## Architecture in one line
 
-Build a simple working prototype that demonstrates:
+**No backend on the critical path.** The scoring model is a weighted sum over 18 rows. It runs client-side in TypeScript. One precomputed GeoJSON file (`frontend/public/districts.geojson`) is the only data dependency. A FastAPI wrapper is optional and never blocking.
 
-1. A frontend map interface
-2. A backend API
-3. A basic prediction or scoring method
-4. A clear risk result shown to the user
-
-The goal is not to build a perfect model. The goal is to show a credible end-to-end concept.
-
----
-
-## Very Simple Repository Structure
-
-The repository can start with this structure:
-
-```text
-.
-├── AGENTS.md
-├── README.md
-├── frontend/
-├── backend/
-├── data/
-└── docs/
+```
+frontend/public/districts.geojson   (precomputed, committed)
+        │
+        ▼
+frontend/src/lib/scoring.ts         (WLC engine, client-side)
+        │
+        ▼
+React + Leaflet map + panels        (choropleth, scenario buttons, detail drawer)
 ```
 
-### `frontend/`
+---
 
-Contains the mobile web UI.
+## Two-agent build — file ownership
 
-Likely responsibilities:
+The repo is built in parallel by **two Claude Code agents**. The core rule: **never edit a file outside your lane.**
 
-* Map view
-* Location search
-* Risk display panel
-* English / Cantonese language switch
-* Calls to the backend API
+| Path | Owner | Notes |
+|------|-------|-------|
+| `frontend/src/types.ts` | **SHARED** | The contract. Change only by agreement — read it before writing any code. |
+| `frontend/public/districts.geojson` | **Agent A** | A commits a stub (2–3 districts) first so B is never blocked |
+| `build_data.py` | **Agent A** | Raster pipeline + census merge |
+| `weights_ahp.py` | **Agent A** | AHP weight derivation (run offline, paste output into scenarios.ts) |
+| `frontend/src/lib/scoring.ts` | **Agent A** | Pure TS, no React — B only imports `createScorer` |
+| `frontend/src/scenarios.ts` | **Agent A** | Scenario configs + AHP-derived weights |
+| `frontend/src/components/Map*.tsx` | **Agent B** | Leaflet / deck.gl map |
+| `frontend/src/components/ScenarioPanel.tsx` | **Agent B** | Scenario buttons |
+| `frontend/src/components/DetailPanel.tsx` | **Agent B** | District detail drawer |
+| `frontend/src/i18n/*.json` | **Agent B** | EN + Traditional Chinese strings |
+| `frontend/src/App.tsx` | **Agent B (sole integrator)** | All wiring lives here — Agent A never edits this |
+| `vite.config.ts`, styling, deploy | **Agent B** | |
+| `docs/` | Either | |
 
-### `backend/`
+**If you are Agent A:** you own the data, model, and scoring logic. Do not touch `App.tsx`, components, or i18n files.
 
-Contains the API and prediction logic.
-
-Likely responsibilities:
-
-* Receive location requests from the frontend
-* Load or query weather and flood-related data
-* Calculate a simple risk score
-* Return results to the frontend
-
-### `data/`
-
-Contains any datasets used for the MVP.
-
-Examples:
-
-* Weather samples
-* Historical flood records
-* Open geospatial datasets
-* Demo or mock data
-
-Clearly mark whether data is real, sample, or synthetic.
-
-### `docs/`
-
-Contains notes for the team.
-
-Examples:
-
-* Architecture notes
-* Data source notes
-* Demo script
-* Model assumptions
+**If you are Agent B:** you own everything the user sees. Import `createScorer` and all types from Agent A's files — treat them as fixed. Do not edit `scoring.ts`, `scenarios.ts`, `build_data.py`, or `weights_ahp.py`.
 
 ---
 
-## Simple Architecture
+## Data
 
-```text
-Frontend map UI
-      |
-      v
-Backend API
-      |
-      v
-Risk scoring logic
-      |
-      v
-Weather / flood / open city data
-```
+### Districts GeoJSON schema (`frontend/public/districts.geojson`)
 
-The frontend asks the backend for the risk at a selected location.
-
-The backend returns a result such as:
+Each of the 18 features carries these properties — this is the `District` type in `types.ts`:
 
 ```json
 {
-  "risk_level": "high",
-  "risk_score": 0.78,
-  "top_factors": [
-    "Heavy rainfall forecast",
-    "Nearby historical flood records",
-    "Low-lying urban area"
-  ]
+  "name": "Tuen Mun",
+  "name_tc": "屯門",
+  "pop": 506879,
+  "pct_over65": 19.3,
+  "median_age": 46.1,
+  "density": 5908,
+  "area_km2": 85.8,
+  "land": {
+    "residential": 0.30, "industrial": 0.10,
+    "commercial": 0.08, "green": 0.40,
+    "educational": 0.05, "other": 0.07
+  },
+  "land_source": "raster_2024 | estimated"
 }
 ```
 
----
+### Real data sources
 
-## Frontend Approach
+| Data | Source |
+|------|--------|
+| District boundaries | `https://www.had.gov.hk/psi/hong-kong-administrative-boundaries/hksar_18_district_boundary.json` |
+| Demographics (65+, median age, density) | 2021 Census `DC_21C.xlsx` — `https://www.census2021.gov.hk/doc/DC_21C.xlsx` |
+| Land-use raster | Planning Dept LUHK 10m GeoTIFF — data.gov.hk, provider `hk-pland` (2024 edition) |
 
-The frontend should be simple and mobile-first.
+Hard-coded fallback census values are in `docs/MASTER_BUILD_DOC.md` Appendix A.
 
-Suggested features:
-
-* Show a city map
-* Let users search for a place
-* Let users tap or select a location
-* Show the estimated risk level
-* Show a few reasons for the risk
-* Support English and Cantonese text
-
-Possible tools:
-
-* React, Next.js, or Vite
-* Mapbox, MapLibre, Leaflet, or Google Maps
-* Simple JSON files for translations
+If the raster pipeline doesn't finish within its timebox, ship the heuristic land-use fallback described in the master doc §3.3 — **always label it "estimated" in the UI.**
 
 ---
 
-## Backend Approach
+## Scoring model
 
-The backend should expose a small API.
+Implemented in `frontend/src/lib/scoring.ts`. Read the source before touching anything.
 
-Suggested endpoints:
-
-```text
-GET /health
-GET /api/risk?lat=22.3193&lng=114.1694
+```
+viability(district, scenario) =
+    w_displacement × (1 − norm(log₁₀ density))
+  + w_age          × norm(pct_over65)
+  + w_headroom     × norm(residential_frac) × (1 − land[target])
+  + w_area         × norm(area_km2)
 ```
 
-The `/api/risk` endpoint should return:
-
-* Location
-* Risk score
-* Risk level
-* Main contributing factors
-* Data freshness if available
-
-Possible tools:
-
-* Python
-* FastAPI
-* pandas
-* simple JSON / CSV files at first
+- Weights are AHP-derived (run `weights_ahp.py` to regenerate).
+- The headroom `× (1 − land[target])` factor is critical — without it, a district already 50% green scores high as a green candidate. Do not remove it.
+- Normalisation is min-max across all 18 districts, except density which uses `log₁₀` first.
 
 ---
 
-## Prediction Approach
+## Scenarios
 
-Start with a simple rule-based score.
+Four pre-defined scenarios in `frontend/src/scenarios.ts`:
 
-Example:
+| id | Target | Emphasis |
+|----|--------|---------|
+| `green_hk_2050` | green | headroom + area |
+| `industrial_growth` | industrial | area + displacement |
+| `education_hub` | educational | headroom dominant |
+| `urban_renewal` | residential | age proxy for renewal need |
 
-```text
-risk_score =
-  rainfall_score
-+ flood_history_score
-+ location_risk_score
-```
-
-Possible factors:
-
-* Current or forecasted rainfall
-* Historical flood incidents nearby
-* Low elevation
-* Dense urban area
-* Known flood-prone district
-* Distance to coast, river, or drainage channel
-
-For the MVP, a simple score is better than an unfinished machine learning model.
-
-A possible risk scale:
-
-|     Score | Risk     |
-| --------: | -------- |
-| 0.00–0.30 | Low      |
-| 0.30–0.60 | Medium   |
-| 0.60–0.80 | High     |
-| 0.80–1.00 | Critical |
+A scenario is `{ id, target, weights, label_key, description_key, horizon_year }`. Switching scenarios triggers a map recolour — nothing else changes.
 
 ---
 
-## Data Approach
+## Language support
 
-Use whatever data is easiest to access during the hackathon.
-
-Possible sources:
-
-* Weather API or sample weather data
-* Historical flood records
-* OpenStreetMap
-* Government open data
-* Manually prepared demo locations
-* Synthetic data for missing pieces
-
-Do not pretend synthetic data is real. Label it clearly.
+EN + Traditional Chinese (not Simplified). Keys in `frontend/src/i18n/en.json` and `yue.json`.
 
 ---
 
-## Language Support
+## Hackathon build order
 
-The UI should support:
+Irreducible core — ship this before anything else:
 
-* English
-* Cantonese / Traditional Chinese
+1. `districts.geojson` stub (Agent A) so Agent B is unblocked
+2. 18-district choropleth on the map (Agent B)
+3. One scenario recolours the map (both)
+4. District tap → detail panel with score + top-3 reasons (Agent B)
+5. Language toggle (Agent B)
 
-A simple approach:
+Then in priority order: real raster land-use data, second scenario, donut chart, all four scenarios, deploy.
 
-```text
-frontend/
-└── i18n/
-    ├── en.json
-    └── yue.json
-```
-
-Use stable keys such as:
-
-```json
-{
-  "risk.low": "Low risk",
-  "risk.medium": "Medium risk",
-  "risk.high": "High risk",
-  "risk.critical": "Critical risk"
-}
-```
+Cut list (drop in this order if behind): FastAPI wrapper, building-age stretch, district comparison, two of four scenarios.
 
 ---
 
-## Hackathon Priorities
+## Demo script
 
-Build in this order:
-
-1. Basic frontend page
-2. Map display
-3. Backend `/api/risk` endpoint
-4. Mock risk response
-5. Connect frontend to backend
-6. Add simple scoring logic
-7. Add demo data
-8. Add English / Cantonese switch
-9. Polish the demo flow
-
-Do not spend too much time on complex modeling before the full app works.
+1. Open app → HK map, 18 districts coloured by dominant land use
+2. Tap **"Industrial Growth"** → map recolours by viability score
+3. Tap a district (e.g. Tuen Mun) → detail panel: land mix, demographics, score, top-3 reasons
+4. Switch language → everything flips to Traditional Chinese
+5. Tap **"Green HK 2050"** → a different set of districts highlights
 
 ---
 
-## Demo Plan
+## Important constraints
 
-A good demo should show:
-
-1. Open the mobile web app
-2. Search for a location
-3. Show predicted risk
-4. Explain the top risk factors
-5. Switch language
-6. Compare with another location
-
-Prepare a few demo locations in advance so the demo is reliable.
-
----
-
-## Important Limitations
-
-This is a hackathon prototype.
-
-The app should not claim to be an official warning system. Risk scores are estimates based on limited data and simplified assumptions.
-
-Use wording like:
-
-* “Estimated risk”
-* “Possible contributing factors”
-* “Prototype prediction”
-* “Not an official emergency warning”
-
----
-
-## Guidance for Contributors
-
-Keep the project simple.
-
-Prioritize:
-
-* A working demo
-* Clear architecture
-* Clear API response
-* Understandable risk explanations
-* Reliable mobile UI
-* Honest data assumptions
-
-Avoid:
-
-* Overengineering
-* Complex ML before the app works
-* Unclear data sources
-* Claims that the model cannot support
-
-The best MVP is a simple, working, explainable map-based prototype.
+- **Do not render 3D buildings or DTM terrain** at territory zoom — analytically meaningless and a performance risk. The existing PyVista viewer is shelved for this concept.
+- **Always show `land_source`** in the UI. Never hide whether data is real or estimated.
+- **Do not call viability scores "official"** — they are an illustrative decision-support model, not a planning assessment.
+- **No backend on the critical path.** The scoring runs in the browser. Do not block UI work on a server.
+- **No ML, no LLM for ranking.** The WLC model is the ranking engine. LLM is Stage 2 optional, only for natural-language input and explanation polish.
