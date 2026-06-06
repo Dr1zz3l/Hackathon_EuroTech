@@ -31,20 +31,38 @@ npm run preview    # serve production build locally
 
 ```
 src/
-├── App.tsx                   # root layout (map + overlays + bottom panel)
-├── main.tsx                  # React entry point
-├── index.css                 # Tailwind directives + global resets
+├── App.tsx                      # root — I18nProvider > MapProvider > AppContent
+├── main.tsx                     # React entry point
+├── index.css                    # Tailwind directives + global resets
+├── types.ts                     # shared Place type
 ├── context/
-│   └── I18nContext.tsx       # locale state + t() helper
+│   ├── I18nContext.tsx          # locale state + t() helper
+│   └── MapContext.tsx           # Leaflet map instance, selected location, panel state
+├── hooks/
+│   └── useRecentSearches.ts     # localStorage-backed recent searches (max 5)
 ├── i18n/
-│   ├── en.json               # English strings
-│   └── yue.json              # Cantonese strings
+│   ├── en.json                  # English strings
+│   └── yue.json                 # Cantonese strings
 └── components/
-    ├── MapView.tsx            # Leaflet map, Hong Kong bounds
-    ├── HamburgerMenu.tsx      # top-left button (empty for now)
-    ├── LanguageSelector.tsx   # top-right EN / 粵 flag toggle
-    └── SearchPanel.tsx        # bottom panel with search + quick picks
+    ├── MapView.tsx              # Leaflet map, HK bounds, MapCapture, SelectedMarker
+    ├── HamburgerMenu.tsx        # top-left button (empty, ready for sidebar)
+    ├── LanguageSelector.tsx     # top-right EN / 粵 flag toggle
+    ├── MyLocationButton.tsx     # GPS crosshair button, fades when panel expands
+    └── SearchPanel.tsx          # animated bottom panel — search, recents, quick picks
 ```
+
+## Search panel behaviour
+
+| State | Panel height | Content shown |
+|---|---|---|
+| Default | `14rem` (compact) | Quick-pick location chips |
+| Focused, empty query, no recents | `65dvh` (expanded) | Quick-pick chips |
+| Focused, empty query, has recents | `65dvh` | Recent searches + "Clear all" |
+| Focused, typing (≥ 2 chars) | `65dvh` | Live Nominatim results |
+
+Selecting a result: flies the map to the location with a 1.2 s animation, drops a red pin, saves to recents, and collapses the panel.
+
+Tapping the map dismisses the keyboard and collapses the panel.
 
 ## Adding new strings
 
