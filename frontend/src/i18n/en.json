@@ -63,5 +63,51 @@
 
   "planner.summary.title": "Planner response",
   "planner.summary.loading": "Computing outcome…",
-  "planner.shortfall": "Goal partially met — not enough donatable land after protections."
+  "planner.shortfall": "Goal partially met — not enough donatable land after protections.",
+
+  "sidebar.chat.title": "Navi",
+  "sidebar.chat.subtitle": "AI planner · planning helper",
+  "sidebar.chat.empty": "Ask a planning question.",
+  "sidebar.chat.empty_sub": "Type a goal below to get AI-powered district recommendations.",
+  "sidebar.chat.placeholder": "Describe a planning goal…",
+  "sidebar.chat.expand": "Open chat",
+  "sidebar.chat.collapse": "Collapse chat",
+
+  "sidebar.layers.title": "Layers",
+  "sidebar.layers.expand": "Open layers",
+  "sidebar.layers.collapse": "Collapse layers",
+  "sidebar.layers.add": "Add data",
+  "sidebar.layers.action.zoom": "Zoom to layer",
+  "sidebar.layers.action.visibility_show": "Show layer",
+  "sidebar.layers.action.visibility_hide": "Hide layer",
+  "sidebar.layers.action.more": "More options",
+
+  "sidebar.layers.menu.lock": "Lock layer",
+  "sidebar.layers.menu.data_table": "Data table",
+  "sidebar.layers.menu.styling": "Styling",
+  "sidebar.layers.menu.rename": "Rename",
+  "sidebar.layers.menu.download": "Download",
+  "sidebar.layers.menu.actions": "Actions",
+  "sidebar.layers.menu.delete": "Delete",
+
+  "layer.districts": "Hong Kong districts",
+  "layer.districts.subtitle": "18 features · GeoJSON",
+  "layer.basemap": "Base map",
+  "layer.basemap.subtitle": "Carto · Positron",
+
+  "panel.right.tab.detail": "District",
+  "panel.right.tab.style": "Style",
+  "panel.right.expand": "Open panel",
+  "panel.right.collapse": "Collapse panel",
+  "panel.right.detail.empty.title": "Tap a district to begin.",
+  "panel.right.detail.empty.sub": "The viability profile appears here.",
+
+  "styling.layer": "Layer",
+  "styling.opacity": "Fill opacity",
+  "styling.palette": "Palette",
+  "styling.palette.land": "Land use",
+  "styling.palette.scenario": "Viability score",
+  "styling.palette.land.help": "Each district coloured by its dominant land category.",
+  "styling.palette.scenario.help": "Each district coloured by viability under the active scenario.",
+  "styling.reset": "Reset to default"
 }

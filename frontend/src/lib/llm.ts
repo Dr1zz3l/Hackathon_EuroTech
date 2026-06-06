@@ -4,13 +4,13 @@
  * All functions throw on any failure (non-200, timeout, parse error)
  * so callers can catch and degrade gracefully — the UI never blocks on LLM.
  *
- * Base path is `/api`, which Vite proxies to localhost:8000 in development.
- * In production set VITE_API_BASE if the backend is on a different origin.
+ * Base path is `/api`, proxied to localhost:8000 in development via next.config.ts rewrites.
+ * In production set NEXT_PUBLIC_API_BASE if the backend is on a different origin.
  */
 
 import type { AllocationResult, District, LandCategory, Scenario, ScoreResult, WeightSet } from '../types'
 
-const API_BASE = (import.meta.env.VITE_API_BASE as string | undefined) ?? ''
+const API_BASE = (process.env.NEXT_PUBLIC_API_BASE as string | undefined) ?? ''
 
 const TIMEOUT_MS = 12_000
 

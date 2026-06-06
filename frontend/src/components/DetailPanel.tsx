@@ -1,9 +1,24 @@
+'use client'
+
 /**
- * DetailPanel — slide-in drawer showing:
- *   • Land-use donut (hand-rolled SVG)
- *   • Demographics
- *   • Viability score + top-3 reasons  (only when a scenario is active)
- *   • Provenance badge (land_source)
+ * DetailPanel — Vercel card-marketing-large chrome (see public/DESIGN-vercel.md).
+ *
+ * Header band hosts the subtle brand mesh gradient when a scenario is active —
+ * the one explicit "brand moment" in the entire app. Everywhere else is the
+ * stark canvas/ink system: mono caption-eyebrows per section, display-md
+ * district names with aggressive negative tracking, hairline dividers between
+ * sections, and stacked-shadow elevation rather than heavy drop-shadows.
+ *
+ *   • Score in display-xl (48 px, weight 600, tracking-display-xl)
+ *   • ScoreBar ramp brand-aligned: link → warning → error
+ *   • AI summary block (Stage 2) — light-themed, gracefully absent
+ *   • Reason rows with mono percentage badges
+ *   • Land-use donut: refined SVG with centered dominant% + sorted legend
+ *     — shows future projected land when allocation data is present
+ *   • TradeList — what was given up to achieve the scenario
+ *   • Demographics in a clean 2-up stat grid
+ *   • Provenance badge — never hidden
+ *   • Close button → icon-button-circular ghost
  */
 
 import { useEffect, useRef, useState } from 'react'
@@ -13,19 +28,19 @@ import { useI18n } from '../context/I18nContext'
 import { buildExplainPayload, explainScore } from '../lib/llm'
 
 // ---------------------------------------------------------------------------
-// Colour map (mirrors MapView + Tailwind config)
+// Land-use palette — keep in sync with MapView + tailwind.config theme.colors.land
 // ---------------------------------------------------------------------------
 const LAND_COLOURS: Record<string, string> = {
-  residential: '#f87171',
-  industrial:  '#a78bfa',
-  commercial:  '#fb923c',
-  green:       '#4ade80',
-  educational: '#60a5fa',
-  other:       '#94a3b8',
+  residential: '#ff0080',
+  industrial:  '#7928ca',
+  commercial:  '#f5a623',
+  green:       '#50e3c2',
+  educational: '#0070f3',
+  other:       '#a1a1a1',
 }
 
 // ---------------------------------------------------------------------------
-// SVG donut helper
+// SVG donut — Vercel brand visuals with centered dominant% label
 // ---------------------------------------------------------------------------
 
 interface Slice {
@@ -36,13 +51,13 @@ interface Slice {
 
 function DonutChart({ land }: { land: LandUse }) {
   const { t } = useI18n()
-  const cx = 60, cy = 60, r = 46, inner = 28
+  const cx = 64, cy = 64, r = 52, inner = 34
   const total = Object.values(land).reduce((a, b) => a + b, 0)
   const slices: Slice[] = (Object.entries(land) as [string, number][])
     .filter(([, v]) => v > 0)
-    .map(([k, v]) => ({ category: k, fraction: v / total, colour: LAND_COLOURS[k] ?? '#94a3b8' }))
+    .map(([k, v]) => ({ category: k, fraction: v / total, colour: LAND_COLOURS[k] ?? '#a1a1a1' }))
 
-  let angle = -Math.PI / 2  // start at 12 o'clock
+  let angle = -Math.PI / 2
   const paths = slices.map(sl => {
     const start = angle
     const sweep = sl.fraction * 2 * Math.PI
@@ -65,52 +80,76 @@ function DonutChart({ land }: { land: LandUse }) {
       'Z',
     ].join(' ')
 
-    return <path key={sl.category} d={d} fill={sl.colour} stroke="#1e293b" strokeWidth="1" />
+    return <path key={sl.category} d={d} fill={sl.colour} stroke="#ffffff" strokeWidth="1.5" />
   })
 
+  const dominant = slices.reduce((a, b) => (b.fraction > a.fraction ? b : a), slices[0])
+
   return (
-    <div className="flex gap-3 items-start">
-      <svg width="120" height="120" viewBox="0 0 120 120" className="shrink-0">
-        {paths}
-      </svg>
-      <div className="flex flex-col gap-1 text-xs mt-1">
-        {slices.map(sl => (
-          <div key={sl.category} className="flex items-center gap-1.5">
-            <span
-              className="inline-block w-2.5 h-2.5 rounded-sm"
-              style={{ background: sl.colour }}
-            />
-            <span className="text-slate-300 text-[11px]">
-              {t(`land.${sl.category}`)}
-            </span>
-            <span className="text-slate-400 ml-auto pl-2">
-              {(sl.fraction * 100).toFixed(1)}%
-            </span>
-          </div>
-        ))}
+    <div className="flex gap-4 items-start">
+      <div className="relative shrink-0">
+        <svg width="128" height="128" viewBox="0 0 128 128">
+          {paths}
+        </svg>
+        <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
+          <span className="eyebrow text-[9px]">Dominant</span>
+          <span className="text-[16px] font-semibold tracking-display-sm">
+            {dominant ? Math.round(dominant.fraction * 100) : 0}%
+          </span>
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+        {slices
+          .slice()
+          .sort((a, b) => b.fraction - a.fraction)
+          .map(sl => (
+            <div key={sl.category} className="flex items-center gap-2 text-[12px]">
+              <span
+                className="inline-block w-2 h-2 rounded-sm shrink-0 shadow-hairline-inset"
+                style={{ background: sl.colour }}
+              />
+              <span className="text-body truncate">{t(`land.${sl.category}`)}</span>
+              <span className="text-mute ml-auto font-mono tabular-nums text-[11px]">
+                {(sl.fraction * 100).toFixed(1)}%
+              </span>
+            </div>
+          ))}
       </div>
     </div>
   )
 }
 
 // ---------------------------------------------------------------------------
-// Score bar
+// Score bar — brand link → warning → error ramp
 // ---------------------------------------------------------------------------
 
 function ScoreBar({ score }: { score: number }) {
-  const pct = Math.round(score * 100)
-  const colour = score < 0.4 ? '#93c5fd' : score < 0.65 ? '#fde68a' : '#ef4444'
+  const pct = Math.max(0, Math.min(100, Math.round(score * 100)))
   return (
-    <div className="flex items-center gap-2">
-      <div className="flex-1 h-2.5 rounded-full bg-slate-700 overflow-hidden">
+    <div className="space-y-2">
+      <div className="flex items-baseline justify-between gap-3">
+        <span className="display-xl tabular-nums">{pct}</span>
+        <span className="eyebrow">out of 100</span>
+      </div>
+      <div className="relative h-2 rounded-full overflow-hidden bg-canvas-soft-2">
         <div
-          className="h-full rounded-full transition-all duration-300"
-          style={{ width: `${pct}%`, background: colour }}
+          className="absolute inset-0 rounded-full"
+          style={{
+            background: 'linear-gradient(to right, #0070f3, #f5a623, #ee0000)',
+          }}
+        />
+        {/* Mask the right portion to reveal only [0, pct] */}
+        <div
+          className="absolute inset-y-0 right-0 bg-canvas-soft-2"
+          style={{ width: `${100 - pct}%` }}
+        />
+        {/* Position indicator */}
+        <div
+          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-canvas shadow-card"
+          style={{ left: `calc(${pct}% - 6px)` }}
         />
       </div>
-      <span className="text-sm font-bold tabular-nums" style={{ color: colour }}>
-        {pct}
-      </span>
     </div>
   )
 }
@@ -122,14 +161,36 @@ function ScoreBar({ score }: { score: number }) {
 function ReasonRow({ term, t }: { term: ScoreTerm; t: (k: string) => string }) {
   const pct = Math.round(term.contribution * 100)
   return (
-    <div className="flex items-start gap-2 text-xs">
-      <span
-        className="mt-0.5 shrink-0 inline-block w-1.5 h-1.5 rounded-full bg-amber-400"
-      />
-      <span className="text-slate-300 flex-1">
+    <div className="flex items-start gap-3 py-2 hairline last:border-b-0">
+      <span className="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-ink" />
+      <span className="text-[13px] text-body flex-1 leading-snug">
         {t(`reason.${term.key}`).replace('{value}', term.display_value)}
       </span>
-      <span className="tabular-nums text-slate-500 text-[10px]">+{pct}</span>
+      <span
+        className="
+          shrink-0 inline-flex items-center justify-center
+          font-mono tabular-nums text-[10px] tracking-[0.05em]
+          h-5 px-1.5 rounded-md
+          bg-canvas-soft-2 text-ink
+        "
+      >
+        +{pct}
+      </span>
+    </div>
+  )
+}
+
+// ---------------------------------------------------------------------------
+// Stat row
+// ---------------------------------------------------------------------------
+
+function StatRow({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span className="eyebrow">{label}</span>
+      <span className="text-[14px] font-medium text-ink tabular-nums tracking-body-sm">
+        {value}
+      </span>
     </div>
   )
 }
@@ -140,30 +201,28 @@ function ReasonRow({ term, t }: { term: ScoreTerm; t: (k: string) => string }) {
 
 function TradeList({ allocation, t }: { allocation: DistrictAllocation; t: (k: string) => string }) {
   const entries = (Object.entries(allocation.delta) as [string, number][])
-    .filter(([, v]) => Math.abs(v) >= 0.001) // skip sub-0.1% noise
-    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])) // largest change first
+    .filter(([, v]) => Math.abs(v) >= 0.001)
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1]))
 
   if (entries.length === 0) return null
 
   return (
     <section>
-      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-        {t('panel.trade.title')}
-      </h3>
-      <div className="space-y-1">
+      <p className="eyebrow mb-3">{t('panel.trade.title')}</p>
+      <div className="space-y-1.5">
         {entries.map(([cat, delta]) => {
           const pct = (delta * 100).toFixed(1)
           const isGain = delta > 0
           return (
-            <div key={cat} className="flex items-center gap-2 text-xs">
+            <div key={cat} className="flex items-center gap-2 text-[12px]">
               <span
                 className="inline-block w-2 h-2 rounded-sm shrink-0"
                 style={{ background: LAND_COLOURS[cat] ?? '#94a3b8' }}
               />
-              <span className="text-slate-300 flex-1">{t(`land.${cat}`)}</span>
+              <span className="text-body flex-1">{t(`land.${cat}`)}</span>
               <span
-                className="tabular-nums font-medium"
-                style={{ color: isGain ? '#4ade80' : '#f87171' }}
+                className="tabular-nums font-mono font-medium text-[11px]"
+                style={{ color: isGain ? '#16a34a' : '#dc2626' }}
               >
                 {isGain ? '+' : ''}{pct}%
               </span>
@@ -171,7 +230,7 @@ function TradeList({ allocation, t }: { allocation: DistrictAllocation; t: (k: s
           )
         })}
       </div>
-      <p className="text-[10px] text-slate-500 mt-1.5">
+      <p className="text-[10px] text-mute mt-2">
         {t('panel.trade.disclaimer')}
       </p>
     </section>
@@ -201,10 +260,9 @@ export default function DetailPanel({
   const { t, locale } = useI18n()
   const displayName = locale === 'yue' ? district.name_tc : district.name
 
-  // ---- AI explanation (Stage 2) ----
+  // ── AI explanation (Stage 2) ──────────────────────────────────────────────
   const [aiProse, setAiProse]     = useState<string | null>(null)
   const [aiLoading, setAiLoading] = useState(false)
-  // Track the last fetch key so stale responses from a prior selection are dropped
   const fetchKey = useRef<string>('')
 
   useEffect(() => {
@@ -214,7 +272,7 @@ export default function DetailPanel({
     }
 
     const key = `${district.name}|${scenario.id}|${scenario.target}|${scoreResult.score.toFixed(3)}|${locale}`
-    if (key === fetchKey.current) return   // already fetched for this combination
+    if (key === fetchKey.current) return
     fetchKey.current = key
 
     setAiProse(null)
@@ -229,13 +287,9 @@ export default function DetailPanel({
 
     explainScore(payload)
       .then(prose => {
-        // Only apply if the user hasn't moved to a different district/scenario
-        if (fetchKey.current === key) {
-          setAiProse(prose)
-        }
+        if (fetchKey.current === key) setAiProse(prose)
       })
       .catch(() => {
-        // Silently fail — deterministic top-3 reasons remain visible
         if (fetchKey.current === key) setAiProse(null)
       })
       .finally(() => {
@@ -244,79 +298,109 @@ export default function DetailPanel({
   }, [district.name, scenario?.id, scenario?.target, scoreResult?.score, locale]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
-    <div className="flex flex-col h-full bg-slate-900 text-white overflow-y-auto">
-      {/* Header */}
-      <div className="flex items-center justify-between px-4 py-3 bg-slate-800 border-b border-slate-700 shrink-0">
-        <div>
-          <h2 className="text-base font-semibold leading-tight">{displayName}</h2>
-          {scenario && (
-            <p className="text-xs text-slate-400 mt-0.5">
-              {t(scenario.label_key)} · {scenario.horizon_year}
-            </p>
-          )}
+    <div className="flex flex-col h-full bg-canvas text-ink overflow-y-auto">
+
+      {/* ── Header band ─────────────────────────────────────────── */}
+      <div className="relative shrink-0 px-6 pt-6 pb-5 hairline overflow-hidden">
+        {scenario && (
+          <div className="absolute inset-0 bg-brand-mesh opacity-30 pointer-events-none" />
+        )}
+
+        <div className="relative flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-1 min-w-0">
+            <span className="eyebrow">
+              {scenario
+                ? `${t(scenario.label_key)} · ${scenario.horizon_year}`
+                : 'District profile'}
+            </span>
+            <h2 className="display-lg truncate">{displayName}.</h2>
+            {locale !== 'yue' && (
+              <span className="font-mono text-[11px] text-mute mt-0.5">
+                {district.name_tc}
+              </span>
+            )}
+          </div>
+
+          <button
+            onClick={onClose}
+            className="
+              shrink-0 w-8 h-8 rounded-full
+              border border-hairline bg-canvas
+              text-mute hover:text-ink hover:border-hairline-strong
+              flex items-center justify-center
+              transition-colors
+            "
+            aria-label={t('close')}
+          >
+            <svg width="12" height="12" viewBox="0 0 12 12" fill="none">
+              <path d="M2 2l8 8M10 2l-8 8" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
+            </svg>
+          </button>
         </div>
-        <button
-          onClick={onClose}
-          className="text-slate-400 hover:text-white text-xl leading-none px-1"
-          aria-label={t('close')}
-        >
-          ×
-        </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-5">
+      {/* ── Body sections ───────────────────────────────────────── */}
+      <div className="flex-1 overflow-y-auto px-6 pt-6 pb-8 space-y-7">
 
         {/* Viability score — only when a scenario is active */}
         {scenario && scoreResult && (
           <section>
-            <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-              {t('panel.score')}
-            </h3>
+            <p className="eyebrow mb-3">{t('panel.score')}</p>
             <ScoreBar score={scoreResult.score} />
-            <p className="text-[10px] text-slate-500 mt-1.5 leading-tight">
+            <p className="text-[11px] text-mute mt-2.5 leading-snug">
               {t('panel.score.disclaimer')}
             </p>
 
             {/* AI summary (Stage 2) — gracefully absent when backend is down */}
             {(aiLoading || aiProse) && (
-              <div className="mt-3 p-2.5 rounded bg-slate-800 border border-slate-700">
-                <h4 className="text-xs font-medium text-amber-400 mb-1.5">
-                  {t('panel.ai_summary.title')}
-                </h4>
+              <div className="mt-3 p-3 rounded-lg bg-canvas-soft border border-hairline">
+                <p className="eyebrow mb-1.5">{t('panel.ai_summary.title')}</p>
                 {aiLoading ? (
-                  <p className="text-[10px] text-slate-500 animate-pulse">
+                  <p className="text-[11px] text-mute animate-pulse">
                     {t('panel.ai_summary.loading')}
                   </p>
                 ) : (
-                  <p className="text-xs text-slate-300 leading-relaxed">{aiProse}</p>
+                  <p className="text-[12px] text-body leading-relaxed">{aiProse}</p>
                 )}
               </div>
             )}
 
             {/* Top reasons — always shown for transparency */}
-            <div className="mt-3 space-y-2">
-              <h4 className="text-xs font-medium text-slate-400">
-                {t('panel.reasons.title')}
-              </h4>
-              {scoreResult.top_reasons.map(term => (
-                <ReasonRow key={term.key} term={term} t={t} />
-              ))}
+            <div className="mt-5">
+              <p className="eyebrow mb-1.5">{t('panel.reasons.title')}</p>
+              <div className="border-t border-hairline">
+                {scoreResult.top_reasons.map(term => (
+                  <ReasonRow key={term.key} term={term} t={t} />
+                ))}
+              </div>
             </div>
           </section>
         )}
 
         {/* Land-use donut — future when allocation available, else current */}
         <section>
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            {allocation ? t('panel.future.title') : t('panel.land.title')}
-          </h3>
+          <div className="flex items-center justify-between mb-3">
+            <p className="eyebrow">
+              {allocation ? t('panel.future.title') : t('panel.land.title')}
+            </p>
+            <span
+              className={`
+                inline-flex items-center gap-1.5
+                eyebrow
+                ${district.land_source === 'estimated' ? 'text-warning-deep' : 'text-link-deep'}
+              `}
+            >
+              <span
+                className={`
+                  w-1.5 h-1.5 rounded-full
+                  ${district.land_source === 'estimated' ? 'bg-warning' : 'bg-link'}
+                `}
+              />
+              {district.land_source === 'estimated' ? 'Estimated' : 'Source 2024'}
+            </span>
+          </div>
           <DonutChart land={allocation ? allocation.future : district.land} />
-          {/* Provenance badge — never hidden */}
-          <p className={`text-[10px] mt-2 ${
-            district.land_source === 'estimated'
-              ? 'text-amber-400'
-              : 'text-green-400'
-          }`}>
+          <p className="text-[11px] text-mute mt-3 leading-snug">
             {t(`panel.land.source.${district.land_source}`)}
           </p>
         </section>
@@ -328,10 +412,8 @@ export default function DetailPanel({
 
         {/* Demographics */}
         <section>
-          <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            {t('panel.demographics')}
-          </h3>
-          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs">
+          <p className="eyebrow mb-3">{t('panel.demographics')}</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-4">
             <StatRow label={t('panel.pop')} value={district.pop.toLocaleString('en-HK')} />
             <StatRow label={t('panel.area')} value={`${district.area_km2.toFixed(1)} km²`} />
             <StatRow
@@ -348,14 +430,5 @@ export default function DetailPanel({
 
       </div>
     </div>
-  )
-}
-
-function StatRow({ label, value }: { label: string; value: string }) {
-  return (
-    <>
-      <span className="text-slate-400">{label}</span>
-      <span className="text-slate-200 font-medium tabular-nums">{value}</span>
-    </>
   )
 }

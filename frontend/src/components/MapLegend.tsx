@@ -1,18 +1,24 @@
+'use client'
+
 /**
- * MapLegend — floats bottom-left on the map.
- * Shows land-use colour key (default mode) or a score ramp (scenario mode).
+ * MapLegend — Vercel card-marketing chrome.
+ * Floats bottom-left over the map: white canvas card, hairline border, mono eyebrow.
+ *
+ * When a scenario is active: shows a future/viability pill toggle + the
+ * appropriate legend (gradient ramp for viability; land-use swatches for future).
+ * When no scenario: shows the dominant land-use swatches only.
  */
 
 import type { Scenario } from '../types'
 import { useI18n } from '../context/I18nContext'
 
 const LAND_ENTRIES = [
-  { key: 'residential', colour: '#f87171' },
-  { key: 'industrial',  colour: '#a78bfa' },
-  { key: 'commercial',  colour: '#fb923c' },
-  { key: 'green',       colour: '#4ade80' },
-  { key: 'educational', colour: '#60a5fa' },
-  { key: 'other',       colour: '#94a3b8' },
+  { key: 'residential', colour: '#ff0080' },
+  { key: 'industrial',  colour: '#7928ca' },
+  { key: 'commercial',  colour: '#f5a623' },
+  { key: 'green',       colour: '#50e3c2' },
+  { key: 'educational', colour: '#0070f3' },
+  { key: 'other',       colour: '#a1a1a1' },
 ]
 
 interface MapLegendProps {
@@ -25,28 +31,40 @@ export default function MapLegend({ activeScenario, mapMode, onToggleMapMode }: 
   const { t } = useI18n()
 
   return (
-    <div className="absolute bottom-6 left-3 z-[1000] bg-slate-900/90 backdrop-blur rounded-lg p-3 text-xs text-white shadow-lg">
+    <div
+      className="
+        absolute bottom-4 left-4 z-[1000]
+        bg-canvas rounded-lg shadow-card-md
+        p-4 min-w-[200px]
+      "
+    >
       {activeScenario ? (
         <>
-          {/* Mode toggle — only shown when a scenario is active */}
-          <div className="flex gap-1 mb-2 pointer-events-auto">
+          {/* ── Future / Viability pill toggle ─────────────────── */}
+          <div className="flex items-center gap-0.5 p-0.5 rounded-full bg-canvas-soft-2 mb-3 pointer-events-auto">
             <button
               onClick={onToggleMapMode}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                mapMode === 'future'
-                  ? 'bg-amber-400 text-slate-900'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
+              className={`
+                h-6 flex-1 rounded-full
+                text-[10px] font-medium tracking-body-sm
+                transition-colors
+                ${mapMode === 'future'
+                  ? 'bg-canvas text-ink shadow-hairline-inset'
+                  : 'text-mute hover:text-ink'}
+              `}
             >
               {t('map.mode.future')}
             </button>
             <button
               onClick={onToggleMapMode}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-colors ${
-                mapMode === 'viability'
-                  ? 'bg-amber-400 text-slate-900'
-                  : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-              }`}
+              className={`
+                h-6 flex-1 rounded-full
+                text-[10px] font-medium tracking-body-sm
+                transition-colors
+                ${mapMode === 'viability'
+                  ? 'bg-canvas text-ink shadow-hairline-inset'
+                  : 'text-mute hover:text-ink'}
+              `}
             >
               {t('map.mode.viability')}
             </button>
@@ -54,33 +72,33 @@ export default function MapLegend({ activeScenario, mapMode, onToggleMapMode }: 
 
           {mapMode === 'viability' ? (
             <>
-              <p className="font-semibold text-slate-300 mb-1.5 pointer-events-none">
-                {t('map.legend.viability')}
-              </p>
+              {/* Viability score gradient ramp */}
+              <p className="eyebrow mb-2.5">{t('map.legend.viability')}</p>
               <div
-                className="w-28 h-2.5 rounded-full mb-1"
+                className="w-full h-2 rounded-full mb-1.5"
                 style={{
-                  background: 'linear-gradient(to right, #93c5fd, #fde68a, #ef4444)',
+                  background: 'linear-gradient(to right, #0070f3, #f5a623, #ee0000)',
                 }}
               />
-              <div className="flex justify-between text-[10px] text-slate-400 pointer-events-none">
+              <div className="flex justify-between text-[11px] text-mute font-mono">
                 <span>{t('map.legend.low')}</span>
                 <span>{t('map.legend.high')}</span>
               </div>
             </>
           ) : (
             <>
-              <p className="font-semibold text-slate-300 mb-1.5 pointer-events-none">
-                {t('map.legend.future')}
-              </p>
-              <div className="space-y-1 pointer-events-none">
+              {/* Future projected land-use swatches */}
+              <p className="eyebrow mb-2.5">{t('map.legend.future')}</p>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
                 {LAND_ENTRIES.map(({ key, colour }) => (
-                  <div key={key} className="flex items-center gap-1.5">
+                  <div key={key} className="flex items-center gap-2">
                     <span
-                      className="inline-block w-2.5 h-2.5 rounded-sm"
+                      className="inline-block w-2.5 h-2.5 rounded-sm shrink-0 shadow-hairline-inset"
                       style={{ background: colour }}
                     />
-                    <span className="text-slate-300">{t(`land.${key}`)}</span>
+                    <span className="text-[12px] text-body leading-none">
+                      {t(`land.${key}`)}
+                    </span>
                   </div>
                 ))}
               </div>
@@ -89,17 +107,18 @@ export default function MapLegend({ activeScenario, mapMode, onToggleMapMode }: 
         </>
       ) : (
         <>
-          <p className="font-semibold text-slate-300 mb-1.5 pointer-events-none">
-            {t('map.legend.title')}
-          </p>
-          <div className="space-y-1 pointer-events-none">
+          {/* Default: current dominant land-use swatches */}
+          <p className="eyebrow mb-2.5">{t('map.legend.title')}</p>
+          <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
             {LAND_ENTRIES.map(({ key, colour }) => (
-              <div key={key} className="flex items-center gap-1.5">
+              <div key={key} className="flex items-center gap-2">
                 <span
-                  className="inline-block w-2.5 h-2.5 rounded-sm"
+                  className="inline-block w-2.5 h-2.5 rounded-sm shrink-0 shadow-hairline-inset"
                   style={{ background: colour }}
                 />
-                <span className="text-slate-300">{t(`land.${key}`)}</span>
+                <span className="text-[12px] text-body leading-none">
+                  {t(`land.${key}`)}
+                </span>
               </div>
             ))}
           </div>

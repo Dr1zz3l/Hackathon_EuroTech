@@ -1,9 +1,9 @@
+# Next.js (App Router, server build) on Netlify.
+# The official Next runtime plugin wires up SSR/routing — no manual SPA redirect.
 [build]
   base    = "frontend"
   command = "npm run build"
-  publish = "dist"
+  publish = ".next"
 
-[[redirects]]
-  from   = "/*"
-  to     = "/index.html"
-  status = 200
+[[plugins]]
+  package = "@netlify/plugin-nextjs"

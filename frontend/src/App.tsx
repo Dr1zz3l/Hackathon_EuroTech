@@ -1,80 +1,145 @@
+'use client'
+
 /**
  * App.tsx — Agent B sole integrator.
  *
- * Owns all state and wiring. Imports:
- *   createScorer  from lib/scoring.ts   (Agent A — do not edit)
- *   SCENARIOS     from scenarios.ts     (Agent A — do not edit)
- *   District/…    from types.ts         (shared contract — do not edit)
+ * Layout (atlas.co-inspired):
  *
- * State: activeScenario, selectedDistrict, geojson, scorer, allocator, mapMode,
- *        plannerMessage (LLM summary prose after a custom goal)
+ *   ┌──────── nav bar ─────────────────────────────────────────────┐
+ *   │ ┌── scenario rail ─────────────────────────────────────────┐ │
+ *   │ │ [Chat]│[Layers]│       Map                  │[Right tab] │ │
+ *   │ └──────────────────────────────────────────────────────────┘ │
+ *   └──────────────────────────────────────────────────────────────┘
+ *
+ * Left side: Chat panel (AI planner, wired) + Layers panel.
+ * Right side: a single collapsible panel that toggles between
+ *   "District" detail and a "Style" tab.
+ *
+ * Visual system: Vercel-inspired light canvas (public/DESIGN-vercel.md).
+ *
+ * Owns all state and wiring. Imports:
+ *   createScorer    from lib/scoring.ts     (Agent A — do not edit)
+ *   createAllocator from lib/reallocation.ts (Agent A — do not edit)
+ *   SCENARIOS       from scenarios.ts        (Agent A — do not edit)
+ *   District/…      from types.ts            (shared contract — do not edit)
+ *
+ * State: activeScenario, selectedDistrict, geojson, scorer, allocator,
+ *        adjacency, mapMode, plannerMessage (LLM summary after a custom goal),
+ *        layer/panel/sidebar state.
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import dynamic from 'next/dynamic'
 import { I18nProvider, useI18n } from './context/I18nContext'
 import type { Locale } from './context/I18nContext'
 import { createScorer } from './lib/scoring'
 import { createAllocator } from './lib/reallocation'
 import { SCENARIOS } from './scenarios'
-import type { AdjacencyMap, AllocationResult, Allocator, District, Scenario, ScoreResult, Scorer } from './types'
+import type {
+  AdjacencyMap, AllocationResult, Allocator,
+  District, Scenario, ScoreResult, Scorer,
+} from './types'
 import {
   buildSyntheticScenario, buildPlanSummaryPayload,
   parseGoal, summarizePlan, BASE_WEIGHTS,
 } from './lib/llm'
 
-import MapView from './components/MapView'
 import ScenarioPanel from './components/ScenarioPanel'
-import GoalInput from './components/GoalInput'
+import ChatPanel, { type PlannerMessage } from './components/ChatPanel'
 import DetailPanel from './components/DetailPanel'
+import DetailEmptyState from './components/DetailEmptyState'
 import MapLegend from './components/MapLegend'
 import LanguageToggle from './components/LanguageToggle'
+import LayersPanel, { type AppLayer } from './components/LayersPanel'
+import StylingPanel, { type PaletteMode } from './components/StylingPanel'
+import { ChevronLeftIcon, ChevronRightIcon, SlidersIcon, LayersIcon } from './components/Icons'
+import type { MapApi } from './components/MapView'
 
-// ---------------------------------------------------------------------------
-// GeoJSON feature type (mirrors gen_districts_geojson.py output)
-// ---------------------------------------------------------------------------
+// Leaflet touches `window`, so the map must never render on the server.
+const MapView = dynamic(() => import('./components/MapView'), {
+  ssr: false,
+  loading: () => (
+    <div className="w-full h-full flex items-center justify-center bg-canvas-soft-2">
+      <span className="eyebrow">Loading map…</span>
+    </div>
+  ),
+})
+
+// ── GeoJSON feature type (mirrors gen_districts_geojson.py output) ──────────
 interface DistrictFeature {
   type: 'Feature'
   properties: District
   geometry: GeoJSON.Geometry
 }
-
 interface DistrictCollection {
   type: 'FeatureCollection'
   features: DistrictFeature[]
 }
 
-// ---------------------------------------------------------------------------
-// Inner app (needs I18nProvider above it)
-// ---------------------------------------------------------------------------
+// ── Default layer registry ───────────────────────────────────────────────────
+const DEFAULT_LAYERS: AppLayer[] = [
+  {
+    id: 'districts',
+    label_key: 'layer.districts',
+    subtitle_key: 'layer.districts.subtitle',
+    visible: true,
+    opacity: 1.0,
+    capabilities: { download: true, style: true },
+    swatch: 'districts',
+  },
+  {
+    id: 'basemap',
+    label_key: 'layer.basemap',
+    subtitle_key: 'layer.basemap.subtitle',
+    visible: true,
+    opacity: 1.0,
+    capabilities: { download: false, style: true },
+    swatch: 'basemap',
+  },
+]
+
+// ── Right panel tabs ─────────────────────────────────────────────────────────
+type RightTab = 'detail' | 'style'
+
+// Suppress unused import — BASE_WEIGHTS is referenced transitively via llm helpers
+void BASE_WEIGHTS
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// Inner app
+// ═══════════════════════════════════════════════════════════════════════════════
 
 function AppInner() {
   const { locale, t } = useI18n()
 
-  const [geojson, setGeojson] = useState<DistrictCollection | null>(null)
+  // ── Data state ──────────────────────────────────────────────────────────────
+  const [geojson,   setGeojson]   = useState<DistrictCollection | null>(null)
   const [adjacency, setAdjacency] = useState<AdjacencyMap | null>(null)
-  const [scorer, setScorer] = useState<Scorer | null>(null)
+  const [scorer,    setScorer]    = useState<Scorer | null>(null)
   const [allocator, setAllocator] = useState<Allocator | null>(null)
-  const [activeScenario, setActiveScenario] = useState<Scenario | null>(null)
-  const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null)
-  const [loadError, setLoadError] = useState<string | null>(null)
-  /** 'future' = dominant future land use (default); 'viability' = score ramp. */
-  const [mapMode, setMapMode] = useState<'future' | 'viability'>('future')
-
-  /** LLM planner reply shown below the goal input box. */
-  const [plannerMessage, setPlannerMessage] = useState<{
-    rationale: string
-    prose: string | null
-    loading: boolean
-    /** Merged WeightSet that Haiku produced — used for the weight breakdown display. */
-    weights: import('./types').WeightSet | null
-    /** Keys that Haiku explicitly overrode (vs. kept at the 0.25 default). */
-    overriddenKeys: Set<string>
-  } | null>(null)
-
-  // District array used for area-weighted city_delta and TC names in LLM summary
   const [districts, setDistricts] = useState<District[]>([])
+  const [loadError, setLoadError] = useState<string | null>(null)
 
-  // ---- Load GeoJSON + adjacency in parallel at startup ----
+  // ── Scenario / selection state ───────────────────────────────────────────────
+  const [activeScenario,   setActiveScenario]   = useState<Scenario | null>(null)
+  const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null)
+  const [mapMode, setMapMode] = useState<'future' | 'viability'>('future')
+  const [plannerMessage, setPlannerMessage] = useState<PlannerMessage | null>(null)
+
+  // ── Sidebar / panel state ────────────────────────────────────────────────────
+  const [chatOpen,   setChatOpen]   = useState(true)   // open by default — planner is wired
+  const [layersOpen, setLayersOpen] = useState(true)
+  const [rightOpen,  setRightOpen]  = useState(true)
+  const [rightTab,   setRightTab]   = useState<RightTab>('detail')
+
+  // ── Layer state ──────────────────────────────────────────────────────────────
+  const [layers,        setLayers]        = useState<AppLayer[]>(DEFAULT_LAYERS)
+  const [styleLayerId,  setStyleLayerId]  = useState<string>('districts')
+  const [paletteMode,   setPaletteMode]   = useState<PaletteMode>('land')
+
+  // ── Map imperative handle ────────────────────────────────────────────────────
+  const mapApi = useRef<MapApi | null>(null)
+
+  // ── Load GeoJSON + adjacency in parallel at startup ──────────────────────────
   useEffect(() => {
     Promise.all([
       fetch('/districts.geojson').then(r => {
@@ -97,19 +162,25 @@ function AppInner() {
       .catch(err => setLoadError(String(err)))
   }, [])
 
-  // ---- Score result for selected district under active scenario ----
+  // ── Switch palette automatically when a scenario activates ──────────────────
+  useEffect(() => {
+    setPaletteMode(activeScenario ? 'scenario' : 'land')
+  }, [activeScenario])
+
+  // ── Score for selected district under active scenario ────────────────────────
   const scoreResult = useMemo<ScoreResult | null>(() => {
     if (!selectedDistrict || !activeScenario || !scorer) return null
     return scorer.score(selectedDistrict, activeScenario)
   }, [selectedDistrict, activeScenario, scorer])
 
-  // ---- Reallocation result for the active scenario ----
+  // ── Reallocation result for the active scenario ───────────────────────────────
   const allocationResult = useMemo<AllocationResult | null>(() => {
     if (!activeScenario || !allocator || !scorer) return null
     return allocator.allocate(activeScenario, scorer)
   }, [activeScenario, allocator, scorer])
 
-  // ---- LLM goal handler (orchestrates parse → scenario → allocate → summarize) ----
+  // ── LLM goal handler ─────────────────────────────────────────────────────────
+  // Orchestrates: parse-goal → synthetic scenario → reallocation → summarize-plan
   const handleGoal = useCallback(async (text: string) => {
     if (!scorer || !allocator) throw new Error('Data not loaded yet')
 
@@ -121,22 +192,24 @@ function AppInner() {
     setActiveScenario(scenario)
     setMapMode('future')
 
-    // Determine which weight keys Haiku explicitly overrode (vs. kept at default)
+    // Determine which weight keys the LLM explicitly overrode
     const overriddenKeys = new Set(
       (Object.entries(parsed.weight_overrides) as [string, number | null | undefined][])
         .filter(([, v]) => v != null)
         .map(([k]) => k)
     )
 
-    // Show rationale + weights immediately; prose loading
-    const msgBase = { rationale: parsed.rationale, weights: scenario.weights, overriddenKeys }
+    const msgBase = {
+      rationale: parsed.rationale,
+      weights: scenario.weights,
+      overriddenKeys,
+    }
     setPlannerMessage({ ...msgBase, prose: null, loading: true })
 
     // 3. Compute allocation synchronously (don't depend on useMemo render cycle)
     const allocation = allocator.allocate(scenario, scorer)
 
     if (!allocation) {
-      // No goal_delta — shouldn't happen for custom, but degrade gracefully
       setPlannerMessage({ ...msgBase, prose: null, loading: false })
       return
     }
@@ -150,115 +223,140 @@ function AppInner() {
       // Summarize failed — show rationale only, no prose
       setPlannerMessage({ ...msgBase, prose: null, loading: false })
     }
-  }, [scorer, allocator, locale])
+  }, [scorer, allocator, locale, districts])
 
-  // Clear planner message when a preset scenario is selected
+  // ── Clear planner message when a preset scenario is selected ─────────────────
   const handleSelectPreset = useCallback((s: Scenario | null) => {
     setActiveScenario(s)
     setPlannerMessage(null)
   }, [])
 
-  // ---- Loading / error states ----
+  // ── Layer mutation helpers ───────────────────────────────────────────────────
+  const setLayerVisible = useCallback((id: string, visible: boolean) => {
+    setLayers(prev => prev.map(l => (l.id === id ? { ...l, visible } : l)))
+  }, [])
+
+  const setLayerOpacity = useCallback((id: string, opacity: number) => {
+    setLayers(prev => prev.map(l => (l.id === id ? { ...l, opacity } : l)))
+  }, [])
+
+  const zoomToLayer = useCallback((id: string) => {
+    mapApi.current?.zoomToLayer(id)
+  }, [])
+
+  const openStyleForLayer = useCallback((id: string) => {
+    setStyleLayerId(id)
+    setRightTab('style')
+    setRightOpen(true)
+  }, [])
+
+  const downloadLayer = useCallback((id: string) => {
+    if (id !== 'districts' || !geojson) return
+    const blob = new Blob([JSON.stringify(geojson, null, 2)], { type: 'application/geo+json' })
+    const url = URL.createObjectURL(blob)
+    const a = document.createElement('a')
+    a.href = url
+    a.download = 'hk-districts.geojson'
+    a.click()
+    URL.revokeObjectURL(url)
+  }, [geojson])
+
+  const resetStyling = useCallback(() => {
+    setLayers(prev => prev.map(l => {
+      const def = DEFAULT_LAYERS.find(d => d.id === l.id)
+      return def ? { ...l, opacity: def.opacity, visible: def.visible } : l
+    }))
+    setPaletteMode(activeScenario ? 'scenario' : 'land')
+  }, [activeScenario])
+
+  // ── District selection — auto-open Detail tab ────────────────────────────────
+  const handleSelectDistrict = useCallback((d: District) => {
+    setSelectedDistrict(d)
+    setRightTab('detail')
+    setRightOpen(true)
+  }, [])
+
+  // ── Resolve current layer state for MapView ──────────────────────────────────
+  const districtsLayer = layers.find(l => l.id === 'districts')!
+  const basemapLayer   = layers.find(l => l.id === 'basemap')!
+
+  // ── Error state ───────────────────────────────────────────────────────────────
   if (loadError) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-slate-900 text-red-400 p-8 text-center">
-        <div>
-          <p className="font-semibold">Failed to load district data</p>
-          <p className="text-sm mt-1 text-slate-400">{loadError}</p>
+      <div className="w-full h-full flex items-center justify-center bg-canvas-soft p-8">
+        <div className="max-w-md text-center bg-canvas rounded-lg p-8 shadow-card-lg">
+          <p className="eyebrow text-error mb-3">Error · data fetch</p>
+          <p className="display-md mb-2">Failed to load district data.</p>
+          <p className="text-sm text-mute font-mono">{loadError}</p>
         </div>
       </div>
     )
   }
 
+  // ── Loading state ─────────────────────────────────────────────────────────────
   if (!geojson || !scorer) {
     return (
-      <div className="w-full h-full flex items-center justify-center bg-slate-900 text-slate-400">
-        Loading…
+      <div className="w-full h-full flex items-center justify-center bg-canvas-soft">
+        <span className="eyebrow">Loading districts…</span>
       </div>
     )
   }
 
   return (
-    <div className="w-full h-full flex flex-col bg-slate-900">
-      {/* Top bar */}
-      <header className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-700 shrink-0 z-10">
-        <div>
-          <h1 className="text-sm font-bold text-white leading-tight">
-            HK District Viability
-          </h1>
-          <p className="text-[10px] text-slate-500 leading-tight">
-            Smart City Planning · 18 Districts
-          </p>
+    <div className="w-full h-full flex flex-col bg-canvas-soft text-ink">
+
+      {/* ── Nav bar ──────────────────────────────────────────────────── */}
+      <header className="relative shrink-0 h-16 bg-canvas hairline flex items-center justify-between px-6 z-20">
+        <div className="absolute inset-0 bg-brand-mesh-soft opacity-50 pointer-events-none" />
+
+        <div className="relative flex items-center gap-3">
+          <div
+            className="w-7 h-7 rounded-md shadow-hairline-inset"
+            style={{
+              background: 'linear-gradient(135deg, #007cf0 0%, #00dfd8 50%, #ff0080 100%)',
+            }}
+          />
+          <div className="flex flex-col leading-tight">
+            <span className="eyebrow">HK · Smart City · 18 Districts</span>
+            <span className="display-sm">Hong Kong District Viability.</span>
+          </div>
         </div>
-        <LanguageToggle />
+
+        <div className="relative flex items-center gap-2">
+          <LanguageToggle />
+        </div>
       </header>
 
-      {/* Scenario buttons */}
+      {/* ── Scenario rail ────────────────────────────────────────────── */}
       <ScenarioPanel
         activeScenario={activeScenario}
         onSelect={handleSelectPreset}
       />
 
-      {/* Free-text goal input (Stage 2 LLM) */}
-      <GoalInput onGoal={handleGoal} />
-
-      {/* Planner reply — rationale + summary prose */}
-      {plannerMessage && (
-        <div className="px-3 py-2 bg-slate-800 border-b border-slate-700 shrink-0 space-y-1">
-          <p className="text-[10px] text-amber-400 leading-snug italic">
-            {plannerMessage.rationale}
-          </p>
-          {/* Weight breakdown — shows how Haiku tuned the scoring weights */}
-          {plannerMessage.weights && (() => {
-            const w = plannerMessage.weights
-            const WEIGHT_KEYS: (keyof typeof BASE_WEIGHTS)[] = ['displacement', 'age', 'headroom', 'area']
-            if (w.renewal != null) (WEIGHT_KEYS as string[]).push('renewal')
-            const total = WEIGHT_KEYS.reduce((s, k) => s + (w[k as keyof typeof w] ?? 0), 0)
-            const SHORT: Record<string, string> = {
-              displacement: 'displ', age: 'age', headroom: 'headrm', area: 'area', renewal: 'renew',
-            }
-            return (
-              <div className="flex items-center gap-1.5 flex-wrap">
-                <span className="text-[9px] text-slate-500 shrink-0 uppercase tracking-wide">
-                  Haiku weights
-                </span>
-                {WEIGHT_KEYS.map(k => {
-                  const raw = w[k as keyof typeof w] ?? 0
-                  const pct = total > 0 ? Math.round((raw / total) * 100) : 0
-                  const isSet = plannerMessage.overriddenKeys.has(k)
-                  return (
-                    <span
-                      key={k}
-                      title={`${k}: ${raw.toFixed(3)} (${pct}%)${isSet ? ' — tuned by Haiku' : ' — default'}`}
-                      className={`text-[9px] px-1.5 py-0.5 rounded font-mono ${
-                        isSet
-                          ? 'bg-amber-400/25 text-amber-300 ring-1 ring-amber-400/40'
-                          : 'bg-slate-700 text-slate-400'
-                      }`}
-                    >
-                      {SHORT[k]} {pct}%{isSet ? ' ✦' : ''}
-                    </span>
-                  )
-                })}
-              </div>
-            )
-          })()}
-          {plannerMessage.loading ? (
-            <p className="text-[10px] text-slate-500 animate-pulse">
-              {t('planner.summary.loading')}
-            </p>
-          ) : plannerMessage.prose ? (
-            <p className="text-[10px] text-slate-300 leading-relaxed">
-              {plannerMessage.prose}
-            </p>
-          ) : null}
-        </div>
-      )}
-
-      {/* Map + panels */}
+      {/* ── Body: sidebars + map + right panel ───────────────────────── */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Map — full width, with legend overlay */}
-        <div className="relative flex-1">
+
+        {/* Left: AI planner (chat) panel */}
+        <ChatPanel
+          open={chatOpen}
+          onToggle={() => setChatOpen(o => !o)}
+          onGoal={handleGoal}
+          plannerMessage={plannerMessage}
+        />
+
+        {/* Left: layers panel */}
+        <LayersPanel
+          open={layersOpen}
+          onToggle={() => setLayersOpen(o => !o)}
+          layers={layers}
+          onSetVisible={setLayerVisible}
+          onZoomTo={zoomToLayer}
+          onOpenStyle={openStyleForLayer}
+          onDownload={downloadLayer}
+        />
+
+        {/* Map area */}
+        <div className="relative flex-1 bg-canvas-soft-2">
           <MapView
             geojson={geojson}
             scorer={scorer}
@@ -266,8 +364,14 @@ function AppInner() {
             allocationResult={allocationResult}
             mapMode={mapMode}
             selectedDistrict={selectedDistrict}
-            onSelectDistrict={setSelectedDistrict}
+            onSelectDistrict={handleSelectDistrict}
             adjacency={adjacency}
+            districtsVisible={districtsLayer.visible}
+            districtsOpacity={districtsLayer.opacity}
+            basemapVisible={basemapLayer.visible}
+            basemapOpacity={basemapLayer.opacity}
+            paletteMode={paletteMode}
+            apiRef={mapApi}
           />
           <MapLegend
             activeScenario={activeScenario}
@@ -277,35 +381,135 @@ function AppInner() {
 
           {/* Active scenario description badge */}
           {activeScenario && (
-            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] bg-amber-400/90 text-slate-900 text-[11px] font-medium px-3 py-1 rounded-full shadow pointer-events-none whitespace-nowrap">
-              {activeScenario.horizon_year} ·{' '}
-              {activeScenario.custom_label
-                ?? SCENARIOS.find(s => s.id === activeScenario.id)?.id.replace(/_/g, ' ')
-                ?? activeScenario.id}
+            <div className="absolute top-3 left-1/2 -translate-x-1/2 z-[1000] pointer-events-none">
+              <span
+                className="
+                  inline-flex items-center gap-1.5
+                  bg-canvas/90 backdrop-blur
+                  border border-hairline
+                  shadow-card
+                  text-[11px] font-medium tracking-body-sm text-ink
+                  px-3 py-1 rounded-full
+                  whitespace-nowrap
+                "
+              >
+                <span
+                  className="w-1.5 h-1.5 rounded-full"
+                  style={{ background: '#0070f3' }}
+                />
+                {activeScenario.horizon_year} ·{' '}
+                {activeScenario.custom_label
+                  ?? SCENARIOS.find(s => s.id === activeScenario.id)?.id.replace(/_/g, ' ')
+                  ?? activeScenario.id}
+              </span>
             </div>
           )}
         </div>
 
-        {/* Detail panel — slide in from right when a district is selected */}
-        {selectedDistrict && (
-          <div className="w-72 shrink-0 border-l border-slate-700 overflow-hidden">
-            <DetailPanel
-              district={selectedDistrict}
-              scenario={activeScenario}
-              scoreResult={scoreResult}
-              allocation={allocationResult?.byDistrict.get(selectedDistrict.name) ?? null}
-              onClose={() => setSelectedDistrict(null)}
-            />
-          </div>
+        {/* Right panel */}
+        {rightOpen ? (
+          <aside className="w-[360px] shrink-0 h-full bg-canvas border-l border-hairline flex flex-col">
+
+            {/* Tabs */}
+            <div className="shrink-0 hairline flex items-center justify-between gap-2 px-3 py-2">
+              <div className="flex items-center gap-1 p-0.5 rounded-full bg-canvas-soft-2">
+                <button
+                  onClick={() => setRightTab('detail')}
+                  className={`
+                    h-7 px-3 rounded-full
+                    text-[12px] font-medium tracking-body-sm
+                    transition-colors
+                    ${rightTab === 'detail'
+                      ? 'bg-canvas text-ink shadow-hairline-inset'
+                      : 'text-mute hover:text-ink'}
+                  `}
+                >
+                  {t('panel.right.tab.detail')}
+                </button>
+                <button
+                  onClick={() => setRightTab('style')}
+                  className={`
+                    h-7 px-3 rounded-full
+                    text-[12px] font-medium tracking-body-sm
+                    inline-flex items-center gap-1.5
+                    transition-colors
+                    ${rightTab === 'style'
+                      ? 'bg-canvas text-ink shadow-hairline-inset'
+                      : 'text-mute hover:text-ink'}
+                  `}
+                >
+                  <SlidersIcon size={12} />
+                  {t('panel.right.tab.style')}
+                </button>
+              </div>
+
+              <button
+                onClick={() => setRightOpen(false)}
+                aria-label={t('panel.right.collapse')}
+                title={t('panel.right.collapse')}
+                className="
+                  shrink-0 w-7 h-7 rounded-md
+                  text-mute hover:text-ink hover:bg-canvas-soft
+                  inline-flex items-center justify-center
+                  transition-colors
+                "
+              >
+                <ChevronRightIcon size={14} />
+              </button>
+            </div>
+
+            {/* Body */}
+            <div className="flex-1 overflow-hidden">
+              {rightTab === 'detail' ? (
+                selectedDistrict ? (
+                  <DetailPanel
+                    district={selectedDistrict}
+                    scenario={activeScenario}
+                    scoreResult={scoreResult}
+                    allocation={allocationResult?.byDistrict.get(selectedDistrict.name) ?? null}
+                    onClose={() => setSelectedDistrict(null)}
+                  />
+                ) : (
+                  <DetailEmptyState />
+                )
+              ) : (
+                <StylingPanel
+                  layers={layers}
+                  activeLayerId={styleLayerId}
+                  onSetActiveLayer={setStyleLayerId}
+                  onSetOpacity={setLayerOpacity}
+                  paletteMode={paletteMode}
+                  onSetPaletteMode={setPaletteMode}
+                  onReset={resetStyling}
+                />
+              )}
+            </div>
+          </aside>
+        ) : (
+          /* Collapsed rail */
+          <button
+            onClick={() => setRightOpen(true)}
+            aria-label={t('panel.right.expand')}
+            title={t('panel.right.expand')}
+            className="
+              shrink-0 w-10 h-full bg-canvas border-l border-hairline
+              flex flex-col items-center gap-3 pt-4
+              text-mute hover:text-ink hover:bg-canvas-soft
+              transition-colors
+            "
+          >
+            <ChevronLeftIcon size={14} />
+            {selectedDistrict ? <LayersIcon size={16} /> : <SlidersIcon size={16} />}
+          </button>
         )}
       </div>
     </div>
   )
 }
 
-// ---------------------------------------------------------------------------
-// Root — wraps everything in the i18n provider
-// ---------------------------------------------------------------------------
+// ═══════════════════════════════════════════════════════════════════════════════
+// Root
+// ═══════════════════════════════════════════════════════════════════════════════
 export default function App() {
   return (
     <I18nProvider>

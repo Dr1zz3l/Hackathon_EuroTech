@@ -1,6 +1,11 @@
+'use client'
+
 /**
- * ScenarioPanel — row of 4 scenario buttons + a "default view" clear button.
- * Clicking a button sets it active and triggers a map recolour.
+ * ScenarioPanel — Vercel tab-ghost row.
+ *
+ * Centered row of pill-sm (64 px radius) ghost pills.
+ * Active pill polarity-flipped to ink-primary (the brand's single CTA tone).
+ * No emoji — clean type, per the brand voice.
  */
 
 import type { Scenario } from '../types'
@@ -12,53 +17,84 @@ interface ScenarioPanelProps {
   onSelect: (scenario: Scenario | null) => void
 }
 
-const SCENARIO_ICONS: Record<string, string> = {
-  green_hk_2050:     '🌿',
-  industrial_growth: '🏭',
-  education_hub:     '🎓',
-  urban_renewal:     '🏗',
-}
-
 export default function ScenarioPanel({ activeScenario, onSelect }: ScenarioPanelProps) {
   const { t } = useI18n()
 
   return (
-    <div className="flex flex-wrap gap-2 p-3 bg-slate-900/90 backdrop-blur border-b border-slate-700">
-      {/* Clear / default button */}
-      <button
-        onClick={() => onSelect(null)}
-        className={`px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-          activeScenario === null
-            ? 'bg-slate-200 text-slate-900'
-            : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-        }`}
-      >
-        {t('scenario.none.label')}
-      </button>
+    <div className="shrink-0 bg-canvas hairline">
+      <div className="max-w-6xl mx-auto px-6 py-3 flex items-center justify-between gap-4">
 
-      {SCENARIOS.map(scenario => {
-        const isActive = activeScenario?.id === scenario.id
-        return (
+        {/* Mono eyebrow on the left — the "technical layer" voice */}
+        <span className="eyebrow hidden md:inline shrink-0">
+          Scenario · choose a planning goal
+        </span>
+
+        {/* Centered pill row */}
+        <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {/* Default-view pill */}
           <button
-            key={scenario.id}
-            onClick={() => onSelect(isActive ? null : scenario)}
-            title={t(scenario.description_key)}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors ${
-              isActive
-                ? 'bg-amber-400 text-slate-900 shadow-md'
-                : 'bg-slate-700 text-slate-300 hover:bg-slate-600'
-            }`}
+            onClick={() => onSelect(null)}
+            className={`
+              h-9 px-4 rounded-[64px] text-[13px] font-medium tracking-body-sm
+              transition-colors whitespace-nowrap
+              ${activeScenario === null
+                ? 'bg-ink text-canvas shadow-hairline-inset'
+                : 'bg-canvas text-body hover:text-ink hover:bg-canvas-soft'}
+            `}
           >
-            <span>{SCENARIO_ICONS[scenario.id]}</span>
-            <span>{t(scenario.label_key)}</span>
-            {isActive && (
-              <span className="text-slate-600 text-xs">
-                {scenario.horizon_year}
-              </span>
-            )}
+            {t('scenario.none.label')}
           </button>
-        )
-      })}
+
+          {/* Hairline separator */}
+          <span className="w-px h-5 bg-hairline mx-1 shrink-0" />
+
+          {SCENARIOS.map(scenario => {
+            const isActive = activeScenario?.id === scenario.id
+            return (
+              <button
+                key={scenario.id}
+                onClick={() => onSelect(isActive ? null : scenario)}
+                title={t(scenario.description_key)}
+                className={`
+                  h-9 px-4 rounded-[64px] text-[13px] font-medium tracking-body-sm
+                  inline-flex items-center gap-2 transition-colors whitespace-nowrap
+                  ${isActive
+                    ? 'bg-ink text-canvas shadow-hairline-inset'
+                    : 'bg-canvas text-body hover:text-ink hover:bg-canvas-soft'}
+                `}
+              >
+                <span>{t(scenario.label_key)}</span>
+                <span
+                  className={`
+                    font-mono text-[10px] tracking-[0.05em]
+                    ${isActive ? 'text-mute' : 'text-mute'}
+                  `}
+                >
+                  {scenario.horizon_year}
+                </span>
+              </button>
+            )
+          })}
+        </div>
+
+        {/* Right-side state pill — mirrors the eyebrow weight */}
+        <div className="hidden md:flex items-center gap-2 shrink-0">
+          <span
+            className={`
+              eyebrow inline-flex items-center gap-1.5
+              ${activeScenario ? 'text-link' : 'text-mute'}
+            `}
+          >
+            <span
+              className={`
+                w-1.5 h-1.5 rounded-full
+                ${activeScenario ? 'bg-link' : 'bg-hairline-strong'}
+              `}
+            />
+            {activeScenario ? 'Scenario active' : 'Default view'}
+          </span>
+        </div>
+      </div>
     </div>
   )
 }

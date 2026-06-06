@@ -240,7 +240,7 @@ function assertConservation(
   result: AllocationResult,
   G: number,
 ): void {
-  if (import.meta.env.PROD) return;
+  if (process.env.NODE_ENV === 'production') return;
 
   let totalReceived = 0;
   for (const d of districts) {
