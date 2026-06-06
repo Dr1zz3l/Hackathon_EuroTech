@@ -1,4 +1,2 @@
-\# Eurotech hackathon - Robotics \& AI projects
-
-\*By: Titivi, fr\*
-
+# HK & GDA | Prediction of flood related issues
+_**By**_: *TL & TW & VF & FH*
