@@ -6,7 +6,7 @@
  *   • Provenance badge (land_source)
  */
 
-import type { District, Scenario, ScoreResult, ScoreTerm } from '../types'
+import type { District, DistrictAllocation, LandUse, Scenario, ScoreResult, ScoreTerm } from '../types'
 import { useI18n } from '../context/I18nContext'
 
 // ---------------------------------------------------------------------------
@@ -31,11 +31,11 @@ interface Slice {
   colour: string
 }
 
-function DonutChart({ district }: { district: District }) {
+function DonutChart({ land }: { land: LandUse }) {
   const { t } = useI18n()
   const cx = 60, cy = 60, r = 46, inner = 28
-  const total = Object.values(district.land).reduce((a, b) => a + b, 0)
-  const slices: Slice[] = (Object.entries(district.land) as [string, number][])
+  const total = Object.values(land).reduce((a, b) => a + b, 0)
+  const slices: Slice[] = (Object.entries(land) as [string, number][])
     .filter(([, v]) => v > 0)
     .map(([k, v]) => ({ category: k, fraction: v / total, colour: LAND_COLOURS[k] ?? '#94a3b8' }))
 
@@ -77,7 +77,7 @@ function DonutChart({ district }: { district: District }) {
               className="inline-block w-2.5 h-2.5 rounded-sm"
               style={{ background: sl.colour }}
             />
-            <span className="text-slate-300">
+            <span className="text-slate-300 text-[11px]">
               {t(`land.${sl.category}`)}
             </span>
             <span className="text-slate-400 ml-auto pl-2">
@@ -132,6 +132,50 @@ function ReasonRow({ term, t }: { term: ScoreTerm; t: (k: string) => string }) {
 }
 
 // ---------------------------------------------------------------------------
+// Trade list — what was given up to achieve the scenario delta
+// ---------------------------------------------------------------------------
+
+function TradeList({ allocation, t }: { allocation: DistrictAllocation; t: (k: string) => string }) {
+  const entries = (Object.entries(allocation.delta) as [string, number][])
+    .filter(([, v]) => Math.abs(v) >= 0.001) // skip sub-0.1% noise
+    .sort((a, b) => Math.abs(b[1]) - Math.abs(a[1])) // largest change first
+
+  if (entries.length === 0) return null
+
+  return (
+    <section>
+      <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
+        {t('panel.trade.title')}
+      </h3>
+      <div className="space-y-1">
+        {entries.map(([cat, delta]) => {
+          const pct = (delta * 100).toFixed(1)
+          const isGain = delta > 0
+          return (
+            <div key={cat} className="flex items-center gap-2 text-xs">
+              <span
+                className="inline-block w-2 h-2 rounded-sm shrink-0"
+                style={{ background: LAND_COLOURS[cat] ?? '#94a3b8' }}
+              />
+              <span className="text-slate-300 flex-1">{t(`land.${cat}`)}</span>
+              <span
+                className="tabular-nums font-medium"
+                style={{ color: isGain ? '#4ade80' : '#f87171' }}
+              >
+                {isGain ? '+' : ''}{pct}%
+              </span>
+            </div>
+          )
+        })}
+      </div>
+      <p className="text-[10px] text-slate-500 mt-1.5">
+        {t('panel.trade.disclaimer')}
+      </p>
+    </section>
+  )
+}
+
+// ---------------------------------------------------------------------------
 // Main component
 // ---------------------------------------------------------------------------
 
@@ -139,6 +183,8 @@ interface DetailPanelProps {
   district: District
   scenario: Scenario | null
   scoreResult: ScoreResult | null
+  /** Per-district reallocation result — null for Urban Renewal or when not computed yet. */
+  allocation: DistrictAllocation | null
   onClose: () => void
 }
 
@@ -146,6 +192,7 @@ export default function DetailPanel({
   district,
   scenario,
   scoreResult,
+  allocation,
   onClose,
 }: DetailPanelProps) {
   const { t, locale } = useI18n()
@@ -197,12 +244,12 @@ export default function DetailPanel({
           </section>
         )}
 
-        {/* Land-use donut */}
+        {/* Land-use donut — future when allocation available, else current */}
         <section>
           <h3 className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">
-            {t('panel.land.title')}
+            {allocation ? t('panel.future.title') : t('panel.land.title')}
           </h3>
-          <DonutChart district={district} />
+          <DonutChart land={allocation ? allocation.future : district.land} />
           {/* Provenance badge — never hidden */}
           <p className={`text-[10px] mt-2 ${
             district.land_source === 'estimated'
@@ -212,6 +259,11 @@ export default function DetailPanel({
             {t(`panel.land.source.${district.land_source}`)}
           </p>
         </section>
+
+        {/* Trade list — what was given up */}
+        {allocation && (
+          <TradeList allocation={allocation} t={t} />
+        )}
 
         {/* Demographics */}
         <section>

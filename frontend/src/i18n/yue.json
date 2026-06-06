@@ -14,8 +14,11 @@
 
   "map.legend.title": "主要土地用途",
   "map.legend.viability": "可行性評分",
+  "map.legend.future": "預測土地用途",
   "map.legend.low": "低",
   "map.legend.high": "高",
+  "map.mode.future": "未來",
+  "map.mode.viability": "可行性",
 
   "land.residential": "住宅",
   "land.industrial": "工業",
@@ -26,9 +29,12 @@
 
   "panel.score": "可行性評分",
   "panel.score.disclaimer": "示意性決策支援模型 — 並非官方規劃評估。",
-  "panel.land.title": "土地用途分佈",
+  "panel.land.title": "現有土地用途（2024）",
+  "panel.future.title": "預測土地用途",
   "panel.land.source.estimated": "⚠ 土地用途數據：估算（啟發式）",
   "panel.land.source.raster_2024": "土地用途數據：規劃署2024年柵格數據",
+  "panel.trade.title": "交換了甚麼",
+  "panel.trade.disclaimer": "示意性重新分配 — 按各類別現有比例等比例縮減。",
   "panel.demographics": "人口統計",
   "panel.pop": "人口",
   "panel.density": "密度",

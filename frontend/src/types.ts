@@ -110,6 +110,18 @@ export interface Scenario {
   description_key: string;
   /** Target completion year shown in the UI. */
   horizon_year:    number;
+  /**
+   * City-wide growth target expressed as a fraction of current total target-category
+   * area, e.g. 0.20 = add 20% more green. Absent for in-place scenarios
+   * (urban_renewal) — no land reallocation is performed.
+   */
+  goal_delta?:       number;
+  /**
+   * Controls the agglomeration strength μ in the QP objective.
+   * High (~1.5) clusters growth near existing concentrations (green corridors,
+   * educational clusters); moderate (~0.8) allows more spread (industrial).
+   */
+  cluster_strength?: number;
 }
 
 // ------------------------------------------------------------
@@ -173,3 +185,49 @@ export interface Scorer {
 
 /** Factory signature — adjacency is optional; app degrades gracefully without it. */
 export type CreateScorer = (districts: District[], adjacency?: AdjacencyMap) => Scorer;
+
+// ------------------------------------------------------------
+// Reallocation output types
+// ------------------------------------------------------------
+
+/**
+ * Per-district result of the reallocation algorithm.
+ * `current` = 2024 raster fractions; `future` = projected fractions after
+ * the scenario goal is met; `delta` = signed difference (future − current).
+ */
+export interface DistrictAllocation {
+  name:        string;
+  current:     LandUse;
+  future:      LandUse;
+  /** Signed fraction deltas (future − current) for every category including other. */
+  delta:       LandUse;
+  /** km² of target-category land received by this district. */
+  received_km2: number;
+}
+
+/**
+ * City-wide result returned by Allocator.allocate().
+ * `byDistrict` is keyed by district.name.
+ */
+export interface AllocationResult {
+  byDistrict:  Map<string, DistrictAllocation>;
+  target:      LandCategory;
+  /** Total km² the scenario aimed to add. */
+  goalKm2:     number;
+  /**
+   * Actual km² added (may be < goalKm2 if all districts are capped).
+   * Display a shortfall warning when achievedKm2 < 0.99 * goalKm2.
+   */
+  achievedKm2: number;
+}
+
+/**
+ * Allocator factory returned by createAllocator().
+ * `allocate` returns null for scenarios without a goal_delta (urban_renewal).
+ */
+export interface Allocator {
+  allocate: (scenario: Scenario, scorer: Scorer) => AllocationResult | null;
+}
+
+/** Factory signature — adjacency optional, same degradation pattern as CreateScorer. */
+export type CreateAllocator = (districts: District[], adjacency?: AdjacencyMap) => Allocator;

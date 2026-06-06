@@ -14,8 +14,11 @@
 
   "map.legend.title": "Dominant land use",
   "map.legend.viability": "Viability score",
+  "map.legend.future": "Projected land use",
   "map.legend.low": "Low",
   "map.legend.high": "High",
+  "map.mode.future": "Future",
+  "map.mode.viability": "Viability",
 
   "land.residential": "Residential",
   "land.industrial": "Industrial",
@@ -26,9 +29,12 @@
 
   "panel.score": "Viability score",
   "panel.score.disclaimer": "Illustrative decision-support model — not an official planning assessment.",
-  "panel.land.title": "Land-use breakdown",
+  "panel.land.title": "Current land use (2024)",
+  "panel.future.title": "Projected land use",
   "panel.land.source.estimated": "⚠ Land-use data: estimated (heuristic)",
   "panel.land.source.raster_2024": "Land-use data: Planning Dept raster 2024",
+  "panel.trade.title": "What was traded",
+  "panel.trade.disclaimer": "Illustrative reallocation — fractions donated proportionally from all other categories.",
   "panel.demographics": "Demographics",
   "panel.pop": "Population",
   "panel.density": "Density",

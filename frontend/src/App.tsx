@@ -12,8 +12,9 @@
 import { useState, useEffect, useMemo } from 'react'
 import { I18nProvider } from './context/I18nContext'
 import { createScorer } from './lib/scoring'
+import { createAllocator } from './lib/reallocation'
 import { SCENARIOS } from './scenarios'
-import type { AdjacencyMap, District, Scenario, ScoreResult, Scorer } from './types'
+import type { AdjacencyMap, AllocationResult, Allocator, District, Scenario, ScoreResult, Scorer } from './types'
 
 import MapView from './components/MapView'
 import ScenarioPanel from './components/ScenarioPanel'
@@ -43,9 +44,12 @@ function AppInner() {
   const [geojson, setGeojson] = useState<DistrictCollection | null>(null)
   const [adjacency, setAdjacency] = useState<AdjacencyMap | null>(null)
   const [scorer, setScorer] = useState<Scorer | null>(null)
+  const [allocator, setAllocator] = useState<Allocator | null>(null)
   const [activeScenario, setActiveScenario] = useState<Scenario | null>(null)
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null)
   const [loadError, setLoadError] = useState<string | null>(null)
+  /** 'future' = dominant future land use (default); 'viability' = score ramp. */
+  const [mapMode, setMapMode] = useState<'future' | 'viability'>('future')
 
   // ---- Load GeoJSON + adjacency in parallel at startup ----
   useEffect(() => {
@@ -64,6 +68,7 @@ function AppInner() {
         setAdjacency(adj)
         const districts = data.features.map(f => f.properties)
         setScorer(createScorer(districts, adj))
+        setAllocator(createAllocator(districts, adj))
       })
       .catch(err => setLoadError(String(err)))
   }, [])
@@ -73,6 +78,12 @@ function AppInner() {
     if (!selectedDistrict || !activeScenario || !scorer) return null
     return scorer.score(selectedDistrict, activeScenario)
   }, [selectedDistrict, activeScenario, scorer])
+
+  // ---- Reallocation result for the active scenario ----
+  const allocationResult = useMemo<AllocationResult | null>(() => {
+    if (!activeScenario || !allocator || !scorer) return null
+    return allocator.allocate(activeScenario, scorer)
+  }, [activeScenario, allocator, scorer])
 
   // ---- Loading / error states ----
   if (loadError) {
@@ -123,11 +134,17 @@ function AppInner() {
             geojson={geojson}
             scorer={scorer}
             activeScenario={activeScenario}
+            allocationResult={allocationResult}
+            mapMode={mapMode}
             selectedDistrict={selectedDistrict}
             onSelectDistrict={setSelectedDistrict}
             adjacency={adjacency}
           />
-          <MapLegend activeScenario={activeScenario} />
+          <MapLegend
+            activeScenario={activeScenario}
+            mapMode={mapMode}
+            onToggleMapMode={() => setMapMode(m => m === 'future' ? 'viability' : 'future')}
+          />
 
           {/* Active scenario description badge */}
           {activeScenario && (
@@ -144,6 +161,7 @@ function AppInner() {
               district={selectedDistrict}
               scenario={activeScenario}
               scoreResult={scoreResult}
+              allocation={allocationResult?.byDistrict.get(selectedDistrict.name) ?? null}
               onClose={() => setSelectedDistrict(null)}
             />
           </div>

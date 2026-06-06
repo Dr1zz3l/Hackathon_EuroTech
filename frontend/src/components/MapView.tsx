@@ -10,7 +10,7 @@
 
 import { useEffect, useRef } from 'react'
 import L from 'leaflet'
-import type { AdjacencyMap, District, Scenario, ScoreResult, Scorer } from '../types'
+import type { AllocationResult, AdjacencyMap, District, LandUse, Scenario, ScoreResult, Scorer } from '../types'
 import { useI18n } from '../context/I18nContext'
 
 // ---------------------------------------------------------------------------
@@ -29,6 +29,13 @@ const LAND_COLOURS: Record<string, string> = {
 function dominantLandColour(district: District): string {
   const land = district.land
   const key = (Object.keys(land) as (keyof typeof land)[]).reduce(
+    (a, b) => (land[a] >= land[b] ? a : b)
+  )
+  return LAND_COLOURS[key] ?? '#94a3b8'
+}
+
+function dominantLandColourFromUse(land: LandUse): string {
+  const key = (Object.keys(land) as (keyof LandUse)[]).reduce(
     (a, b) => (land[a] >= land[b] ? a : b)
   )
   return LAND_COLOURS[key] ?? '#94a3b8'
@@ -78,6 +85,9 @@ interface MapViewProps {
   geojson: DistrictCollection
   scorer: Scorer
   activeScenario: Scenario | null
+  allocationResult: AllocationResult | null
+  /** 'future' = projected dominant land use (default); 'viability' = score ramp. */
+  mapMode: 'future' | 'viability'
   selectedDistrict: District | null
   onSelectDistrict: (d: District) => void
   /** Adjacency graph — used to highlight border-neighbours of the selected district. */
@@ -92,6 +102,8 @@ export default function MapView({
   geojson,
   scorer,
   activeScenario,
+  allocationResult,
+  mapMode,
   selectedDistrict,
   onSelectDistrict,
   adjacency,
@@ -135,7 +147,7 @@ export default function MapView({
     }
   }, [])
 
-  // ---- Re-render GeoJSON layer when scenario / selection / locale changes ----
+  // ---- Re-render GeoJSON layer when scenario / selection / locale / mode changes ----
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -144,6 +156,9 @@ export default function MapView({
       layerRef.current.remove()
       layerRef.current = null
     }
+
+    // Delta label markers — cleared and rebuilt alongside the GeoJSON layer
+    const deltaMarkers: L.Marker[] = []
 
     const layer = L.geoJSON(geojson as unknown as GeoJSON.GeoJsonObject, {
       style: (feature) => {
@@ -154,9 +169,20 @@ export default function MapView({
           && adjacency !== null
           && (adjacency[selectedDistrict.name] ?? []).includes(d.name)
 
-        const fillColor = activeScenario
-          ? scoreColour(scoreMap.current.get(d.name)?.score ?? 0)
-          : dominantLandColour(d)
+        let fillColor: string
+        if (!activeScenario) {
+          fillColor = dominantLandColour(d)
+        } else if (mapMode === 'future' && allocationResult) {
+          const alloc = allocationResult.byDistrict.get(d.name)
+          fillColor = alloc
+            ? dominantLandColourFromUse(alloc.future)
+            : dominantLandColour(d)
+        } else {
+          // viability mode (or future mode but no allocation result — urban_renewal)
+          fillColor = activeScenario
+            ? scoreColour(scoreMap.current.get(d.name)?.score ?? 0)
+            : dominantLandColour(d)
+        }
 
         if (isSelected) {
           return { fillColor, fillOpacity: 0.9, color: '#1e293b', weight: 2.5, dashArray: undefined }
@@ -166,17 +192,17 @@ export default function MapView({
         }
         return { fillColor, fillOpacity: 0.65, color: '#fff', weight: 1, dashArray: undefined }
       },
-      onEachFeature: (feature, layer) => {
+      onEachFeature: (feature, lyr) => {
         const d = feature.properties as District
         const displayName = locale === 'yue' ? d.name_tc : d.name
 
-        layer.bindTooltip(displayName, {
+        lyr.bindTooltip(displayName, {
           permanent: false,
           sticky: true,
           className: 'bg-slate-800 text-white text-xs px-2 py-1 rounded shadow',
         })
 
-        layer.on({
+        lyr.on({
           click: () => onSelectDistrict(d),
           mouseover: (e) => {
             const l = e.target as L.Path
@@ -190,12 +216,77 @@ export default function MapView({
             })
           },
         })
+
+        // Delta labels — only in future mode with allocation data
+        if (activeScenario && mapMode === 'future' && allocationResult) {
+          const alloc = allocationResult.byDistrict.get(d.name)
+          if (alloc) {
+            const delta = alloc.delta
+            type Cat = keyof typeof delta
+            const cats = Object.keys(delta) as Cat[]
+            const gainCat = cats.reduce((a, b) => delta[a] >= delta[b] ? a : b)
+            const lossCat = cats.reduce((a, b) => delta[a] <= delta[b] ? a : b)
+
+            const gainPct = +(delta[gainCat] * 100).toFixed(1)
+            const lossPct = +(delta[lossCat] * 100).toFixed(1)
+
+            if (Math.abs(gainPct) < 0.1 && Math.abs(lossPct) < 0.1) return
+
+            const CAT_LABEL: Record<string, string> = {
+              residential: 'Res', industrial: 'Ind', commercial: 'Com',
+              green: 'Green', educational: 'Edu', other: 'Other',
+            }
+
+            const gainLine = gainPct >= 0.1
+              ? `<div style="color:#4ade80;font-weight:600">+${gainPct}% ${CAT_LABEL[gainCat] ?? gainCat}</div>`
+              : ''
+            const lossLine = lossPct <= -0.1
+              ? `<div style="color:#fca5a5">${lossPct}% ${CAT_LABEL[lossCat] ?? lossCat}</div>`
+              : ''
+            const html = gainLine + lossLine
+            if (!html) return
+
+            const pathLayer = lyr as unknown as L.Polygon
+            const bounds = typeof pathLayer.getBounds === 'function' ? pathLayer.getBounds() : null
+            const center = bounds ? bounds.getCenter() : null
+            if (!center) return
+
+            // Wrap in a centering shell — translate(-50%,-50%) keeps the label
+            // centred on the polygon centroid regardless of its rendered width.
+            const icon = L.divIcon({
+              className: '',
+              html: `<div style="
+                  transform:translate(-50%,-50%);
+                  display:inline-block;
+                  font-size:11px;line-height:1.4;text-align:center;
+                  font-family:ui-monospace,monospace;
+                  background:rgba(2,6,23,0.88);
+                  color:#f1f5f9;
+                  padding:3px 6px;border-radius:4px;
+                  border:1px solid rgba(255,255,255,0.15);
+                  white-space:nowrap;pointer-events:none;
+                  text-shadow:0 1px 2px rgba(0,0,0,0.8);
+                ">${html}</div>`,
+              iconSize: [0, 0],
+              iconAnchor: [0, 0],
+            })
+
+            const marker = L.marker(center, { icon, interactive: false, zIndexOffset: 500 })
+            marker.addTo(map)
+            deltaMarkers.push(marker)
+          }
+        }
       },
     }).addTo(map)
 
     layerRef.current = layer
+
+    // Cleanup delta markers when this effect re-runs
+    return () => {
+      deltaMarkers.forEach(m => m.remove())
+    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [activeScenario, selectedDistrict, locale, geojson, scorer, adjacency])
+  }, [activeScenario, allocationResult, mapMode, selectedDistrict, locale, geojson, scorer, adjacency])
 
   return (
     <div

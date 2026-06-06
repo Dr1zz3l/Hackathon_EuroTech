@@ -43,6 +43,8 @@ const greenHk2050: Scenario = {
   label_key:       'scenario.green_hk_2050.label',
   description_key: 'scenario.green_hk_2050.description',
   horizon_year:    2050,
+  goal_delta:      0.20,   // +20% of city-wide green area
+  cluster_strength: 1.5,   // strong agglomeration: green corridors
 };
 
 /** Industrial Growth — area + headroom dominant (AHP CR = 0.0665). Stage 3: adjacency 0.10 (industrial clusters). */
@@ -59,6 +61,8 @@ const industrialGrowth: Scenario = {
   label_key:       'scenario.industrial_growth.label',
   description_key: 'scenario.industrial_growth.description',
   horizon_year:    2040,
+  goal_delta:      0.15,   // +15% of city-wide industrial area
+  cluster_strength: 0.8,   // moderate agglomeration: some spread needed for industrial parks
 };
 
 /** Education Hub — headroom dominant (AHP CR = 0.0206). Stage 3: adjacency 0.18 (institutional clusters). */
@@ -75,6 +79,8 @@ const educationHub: Scenario = {
   label_key:       'scenario.education_hub.label',
   description_key: 'scenario.education_hub.description',
   horizon_year:    2035,
+  goal_delta:      0.10,   // +10% of city-wide educational area
+  cluster_strength: 1.5,   // strong agglomeration: institutional clusters
 };
 
 /**
