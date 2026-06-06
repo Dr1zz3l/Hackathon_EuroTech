@@ -1,7 +1,10 @@
+import io
+import ssl
 import urllib.request
 import zipfile
-import io
 from pathlib import Path
+
+import certifi
 
 DATA_DIR = Path(__file__).parent.parent / "data"
 DTM_DIR = DATA_DIR / "dtm"
@@ -17,7 +20,8 @@ def download_dtm():
 
     DTM_DIR.mkdir(parents=True, exist_ok=True)
     print(f"Downloading DTM from {DTM_URL} ...")
-    with urllib.request.urlopen(DTM_URL) as response:
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    with urllib.request.urlopen(DTM_URL, context=ssl_context) as response:
         data = response.read()
 
     print("Extracting ...")

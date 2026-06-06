@@ -145,22 +145,37 @@ The backend returns a result such as:
 
 ## Frontend Approach
 
-The frontend should be simple and mobile-first.
+The frontend is mobile-first and is the most developed part of the codebase.
 
-Suggested features:
+### Running the frontend
 
-* Show a city map
-* Let users search for a place
-* Let users tap or select a location
-* Show the estimated risk level
-* Show a few reasons for the risk
-* Support English and Cantonese text
+```bash
+cd frontend
+npm install
+npm run dev      # http://localhost:5173 (also available on local network IP for phone testing)
+npm run build    # type-check + production build
+```
 
-Possible tools:
+### Confirmed tech stack
 
-* React, Next.js, or Vite
-* Mapbox, MapLibre, Leaflet, or Google Maps
-* Simple JSON files for translations
+* **React 18 + TypeScript**, bundled with **Vite 6**
+* **react-leaflet 4** on **CartoDB Voyager** raster tiles — no API key required
+* **Tailwind CSS 3** for all styling
+* Custom context-based i18n with `src/i18n/en.json` and `src/i18n/yue.json`
+
+### What is already built
+
+* Full-screen HK map with restricted pan bounds
+* Bottom search panel with `max-height` expand/collapse animation (300 ms, triggered by search focus)
+* Live Nominatim geocoding with 350 ms debounce, restricted to `countrycodes=hk`
+* Selecting a result: `map.flyTo()` + red SVG pin marker + saved to localStorage recents
+* Recent searches panel (max 5, shown on focus with empty query)
+* Quick-pick chips for common HK districts
+* Flag-based EN / 粵 language toggle
+* GPS "my location" button (fades out when panel is expanded)
+* Tapping the map dismisses search / keyboard
+
+See `frontend/README.md` for the full component map and search panel state table.
 
 ---
 

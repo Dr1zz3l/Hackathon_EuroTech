@@ -6,3 +6,8 @@ __pycache__/
 Digital_Terrain_Model_DTM_GEOTIFF/
 data/*
 !data/.gitkeep
+*.env
+frontend/node_modules/
+frontend/dist/
+frontend/.vite/
+frontend/*.tsbuildinfo
