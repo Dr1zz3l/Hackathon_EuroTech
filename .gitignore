@@ -6,3 +6,6 @@ __pycache__/
 Digital_Terrain_Model_DTM_GEOTIFF/
 data/*
 !data/.gitkeep
+node_modules/
+frontend/dist/
+frontend/package-lock.json
