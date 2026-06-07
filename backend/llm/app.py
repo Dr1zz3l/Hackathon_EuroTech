@@ -61,7 +61,8 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-MODEL = "claude-haiku-4-5"
+MODEL_FAST = "claude-haiku-4-5"    # structured extraction, short outputs
+MODEL_EXPLAIN = "claude-sonnet-4-6"  # user-visible prose in the district card
 
 # Conversational assistant (streaming /api/chat) — see backend/llm/chat.py
 app.include_router(chat_router)
@@ -102,7 +103,7 @@ async def parse_goal(req: ParseGoalRequest) -> ParseGoalResponse:
         client = get_client()
         system = PARSE_SYSTEM.format(locale="Traditional Chinese (繁中)" if req.locale == "yue" else "English")
         response = client.messages.create(
-            model=MODEL,
+            model=MODEL_FAST,
             max_tokens=768,
             system=system,
             messages=[{"role": "user", "content": req.text}],
@@ -175,7 +176,7 @@ async def summarize_plan(req: SummarizePlanRequest) -> SummarizePlanResponse:
         system = SUMMARIZE_SYSTEM.format(locale_desc=_locale_desc(req.locale))
         user_prompt = build_summarize_user_prompt(req)
         response = client.messages.create(
-            model=MODEL,
+            model=MODEL_FAST,
             max_tokens=300,
             system=system,
             messages=[{"role": "user", "content": user_prompt}],
@@ -206,7 +207,7 @@ async def explain(req: ExplainRequest) -> ExplainResponse:
         system = EXPLAIN_SYSTEM.format(locale_desc=_locale_desc(req.locale))
         user_prompt = build_explain_user_prompt(req)
         response = client.messages.create(
-            model=MODEL,
+            model=MODEL_EXPLAIN,
             max_tokens=300,
             system=system,
             messages=[{"role": "user", "content": user_prompt}],
