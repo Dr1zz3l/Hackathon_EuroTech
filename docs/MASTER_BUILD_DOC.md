@@ -3,6 +3,8 @@
 **Event:** EuroTech × HKTE Hackathon, Munich — Smart City track
 **Team size:** 4 · **Time budget:** 24 hours · **Deliverable:** live, deployable web demo + pitch
 
+> **Status (post-hackathon):** All Stages 0–3 are complete. The raster pipeline ran successfully (all 18 districts + 211 neighbourhoods are `raster_2024`). The QP reallocation planner (listed as "not in scope" in §5) was built. See `README.md` for current run instructions.
+
 > **One-line concept:** An interactive map of Hong Kong's 18 districts that takes a city-planning goal (e.g. "+20% green space by 2050") and ranks which districts can meet it with the most spare capacity and the least displacement — with transparent, explainable reasons for every recommendation.
 
 ---
@@ -47,18 +49,28 @@ A scenario is just `{ target_category, weight_overrides }`. Switching scenarios 
 ## 2. Architecture
 
 ```
-Frontend (Vite + React + Leaflet + TypeScript)  — the whole app
-  ├── MapView          Leaflet GeoJSON layer, choropleth, click-to-select
-  ├── ScenarioPanel    4 scenario buttons → set active scenario → recolour
-  ├── DetailPanel      land-use donut + demographics + score + top-3 reasons
-  ├── scoring.ts       normalisation + weighted scoring + reason generation (CLIENT-SIDE)
-  ├── i18n/            en.json + yue.json (Traditional Chinese)
-  └── data/districts.geojson   ← single precomputed, enriched data file
+Frontend (Next.js 16 + React + Leaflet + TypeScript)  — the whole app
+  ├── MapView             Leaflet GeoJSON layer, choropleth, click-to-select
+  ├── ScenarioPanel       4 scenario buttons → set active scenario → recolour
+  ├── DetailPanel         land-use donut + demographics + score + top-3 reasons
+  ├── ForecastPanel       TabPFN-assisted compound-growth projection
+  ├── ChatPanel           streaming AI assistant
+  ├── scoring.ts          normalisation + weighted scoring + reasons (CLIENT-SIDE)
+  ├── reallocation.ts     QP optimizer (KKT + bisection) over 211 STPUs (CLIENT-SIDE)
+  ├── i18n/               en.json + yue.json (Traditional Chinese)
+  ├── public/districts.geojson        18 districts, raster_2024
+  ├── public/neighbourhoods.geojson   211 STPU neighbourhoods, raster_2024
+  └── public/adjacency.json           18-node border graph
 
 Data prep (Python, run once, offline) — NOT shipped to the browser
-  └── build_data.py    merges boundaries + census + land-use → districts.geojson
+  ├── build_data.py           raster pipeline → districts.geojson
+  ├── build_neighbourhoods.py raster pipeline → neighbourhoods.geojson
+  ├── weights_ahp.py          AHP weight derivation → paste into scenarios.ts
+  └── scripts/                build_adjacency.py, gen_districts_geojson.py
 
-(Optional, non-blocking) FastAPI wrapper — only for pitch optics
+(Optional, non-blocking) FastAPI backend — powers AI assistant + forecast
+  └── backend/llm/app.py   /api/chat, /api/explain, /api/parse-goal,
+                            /api/summarize-plan, /api/forecast, /api/health
 ```
 
 **Why static GeoJSON + client-side scoring:** no API latency, no CORS, no env vars, no server to deploy or fall over at 3am. One-click static deploy to Netlify/Vercel. The scoring is too cheap to justify a server.
@@ -96,8 +108,8 @@ Data prep (Python, run once, offline) — NOT shipped to the browser
 | Median age | **REAL** | 2021 Census |
 | Population density (/km²) | **REAL** | 2021 Census |
 | Area (km²) | **REAL (derived)** | Computed = population ÷ density; matches official areas within ~1% |
-| **Land-use split** (residential / industrial / commercial / green / educational) | **REAL *if* raster pipeline succeeds; otherwise SYNTHETIC** | Primary: zonal stats over Planning Dept 10m LUHK raster. Fallback: labelled synthetic heuristic (see §3.3) |
-| Ageing-building share (renewal signal) | **REAL — optional stretch** | Buildings Dept "Building information and age records" + building footprints, aggregated per district |
+| **Land-use split** (9 categories) | **REAL** | Zonal stats over Planning Dept LUMHK 2024 10m raster (`build_data.py`). All 18 districts carry `land_source: "raster_2024"`. The synthetic heuristic fallback (§3.3) was never triggered. |
+| Ageing-building share (renewal signal) | **REAL** | Buildings Dept "Building information and age records" (`data/buildings/building_age.csv`), aggregated per district. Present on all 18 districts. |
 | **Viability score** | **SYNTHETIC — model output** | Our weighted model (§5). It is an illustrative decision-support proxy, **not** an official planning assessment. Must always be labelled as such. |
 | Reason strings | **DERIVED** | Generated deterministically from the score's term contributions |
 
@@ -150,23 +162,27 @@ One GeoJSON file. Each of the 18 features:
     "density": 5908,
     "area_km2": 85.8,
     "land": {
-      "residential": 0.30,
-      "industrial":  0.10,
-      "commercial":  0.08,
-      "green":       0.40,
-      "educational": 0.05,
-      "other":       0.07
+      "residential":    0.30,
+      "industrial":     0.10,
+      "commercial":     0.08,
+      "agricultural":   0.03,
+      "recreational":   0.18,
+      "institutional":  0.05,
+      "misc":           0.04,
+      "infrastructure": 0.12,
+      "protected":      0.10
     },
-    "land_source": "raster_2024 | estimated",
+    "land_source": "raster_2024",
     "ageing_building_share": 0.42
   },
   "geometry": { "...": "Polygon / MultiPolygon, WGS84" }
 }
 ```
 
-- `land.*` are fractions of total district land area; keep `other` visible (honest about transport/water/barren).
-- `land_source` drives the "estimated" label in the UI — never hide it.
-- `ageing_building_share` present only if the optional stretch is built.
+- `land.*` are fractions of total district land area. 9 categories total — 6 reallocatable (`residential`, `industrial`, `commercial`, `agricultural`, `recreational`, `institutional`) + 3 frozen (`misc`, `infrastructure`, `protected`). Fractions sum to ≈ 1.
+- Scenario targets use `recreational` (not `green`) and `institutional` (not `educational`).
+- `land_source` drives the "estimated" label in the UI — never hide it. All 18 districts are `"raster_2024"`.
+- `ageing_building_share` is present on all 18 districts (the building-age stretch was completed).
 
 ---
 
@@ -188,7 +204,7 @@ Ranking districts against several conflicting goals is textbook **MCDA**, and **
 
 ---
 
-### Stage 0 — WLC baseline (MUST SHIP — ~core build)
+### Stage 0 — WLC baseline ✓ COMPLETE
 The guaranteed demo. Hand-set weights, pure weighted sum, client-side in `scoring.ts`.
 
 **Normalisation (precompute once across the 18 districts):** min-max each feature to 0–1. **Density is the exception** — it spans ~1,000 to ~60,000 /km², so normalise `log10(density)` or dense urban districts swamp everything.
@@ -211,20 +227,20 @@ viability(d, T) =
 - `reason.low_density` → "Lower density ({x}/km²) → less displacement"
 - `reason.ageing_stock` → "{x}% of buildings ageing → renewal candidate"
 
-### Stage 1 — AHP-derived weights (~1–2 h · biggest credibility win)
+### Stage 1 — AHP-derived weights ✓ COMPLETE
 Replace the hand-picked 0.30/0.20/0.30/0.20 with weights *derived* by AHP, so a judge can't call them arbitrary. Do the pairwise comparisons once, **offline in Python**, print the weight vector + the consistency ratio, and paste the numbers into the scenario configs. The live app stays a plain weighted sum — nothing changes in `scoring.ts` except the constants. Pitch line: *"weights derived via AHP, consistency ratio 0.0x."* Library: `pyDecision` or `PyLUSAT` (don't hand-roll the matrix maths).
 
-### Stage 2 — LLM language layer (~2–3 h · demo wow, must degrade gracefully)
+### Stage 2 — LLM language layer ✓ COMPLETE
 Wrap the engine — never let it do the ranking. Two uses: (a) **free-text goals** — type "make the New Territories greener," an LLM returns structured JSON `{target, weight_overrides}` that feeds the same WLC; (b) **natural-language explanations** — turn the deterministic score + reason-terms into fluent EN/TC sentences. Must fall back to the 4 preset scenarios + templated reasons if the API is unavailable (this is the only network dependency in the app).
 
-### Stage 3 — Adjacency-graph term (~1–2 h · adds a "spatial reasoning" story)
+### Stage 3 — Adjacency-graph term ✓ COMPLETE
 Build the 18-node border-adjacency graph from the geometry (trivial). Add one extra WLC term = neighbour-average of the target fraction, so the *Education Hub* scenario rewards districts next to institutional clusters and *Green HK 2050* rewards contiguous green corridors. One term, big narrative payoff. **Do not** escalate to a graph neural network — 18 nodes don't justify it and you'd lose explainability.
 
-### Stage 4 — TOPSIS second opinion (~1 h · optional robustness garnish)
+### Stage 4 — TOPSIS second opinion (not built)
 Expose a "ranking method: WLC vs TOPSIS" toggle to show the recommendations are stable across methods. `pymcdm` runs TOPSIS in ~5 lines. Nice-to-have only — it can muddy a 90-second demo, so add it last and cut it first.
 
-### Not in scope (roadmap slide only)
-**Optimization / spatial allocation** (linear programming, multi-objective NSGA-II, CLUE-type models) would turn "rank the districts" into "compute the optimal allocation of +20% green across districts under constraints." More powerful, far heavier, hard to demo and explain. Perfect as a *"v2 goes from ranking to constrained allocation"* pitch line; wrong as a 24 h build. **Supervised ML** is also out — there is no labelled training data for "correct" transformations.
+### Beyond-scope item that was built anyway
+**Optimization / spatial allocation** — the QP reallocation planner (`frontend/src/lib/reallocation.ts`) was built beyond the original 24 h scope. It is a genuine bounded quadratic programme (KKT + bisection on the dual variable ν) that distributes a planning target across 211 STPU neighbourhoods and aggregates back to 18 districts. This directly answers the "v2 goes from ranking to constrained allocation" pitch line — it shipped. **Supervised ML** remains out — there is no labelled training data for "correct" transformations.
 
 ### Build-vs-adapt summary
 DIY the thin glue (the WLC sum + reasons in TS, the scenario configs); **adapt** the established pieces from mature Python libraries — `pyDecision` / `pymcdm` / `PyLUSAT` for AHP and TOPSIS. Faster *and* more credible than inventing a method.
@@ -363,8 +379,8 @@ Source: Census and Statistics Department, 2021 Population Census, Table 2 (Key d
 - Roadmap layers: Country Parks, School enrolment by district, Property Market Statistics, GLA/Lot (all on data.gov.hk)
 
 ## Appendix C — Stack quick reference
-- Frontend (2D baseline): Vite + React + TypeScript + Leaflet; charts via a lightweight donut (Recharts or hand-rolled SVG).
-- Frontend (optional 3D): MapLibre GL + deck.gl `PolygonLayer` (extruded districts by score) — only after 2D works.
-- Data prep: Python + geopandas + rasterio + rasterstats (offline, run once).
-- Deploy: Netlify or Vercel (static).
-- No browser storage APIs; no `<form>` tags in React; all state in React state.
+- Frontend: Next.js 16 + React 19 + TypeScript + Leaflet 1.9 + Tailwind CSS 3 + Recharts.
+- Backend (optional): FastAPI + Uvicorn + Anthropic SDK (`claude-haiku-4-5` / `claude-sonnet-4-6`) + PriorLabs TabPFN v2.
+- Data prep: Python 3.13 + rasterio + shapely + pyproj + fiona (offline, run once via `uv`).
+- Deploy target: Netlify (frontend static) + a Python host for the optional backend.
+- No browser storage APIs; all state in React state.

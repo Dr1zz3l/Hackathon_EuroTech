@@ -12,16 +12,23 @@ An interactive map of Hong Kong's 18 administrative districts that takes a city-
 
 ## Architecture in one line
 
-**No backend on the critical path.** The scoring model is a weighted sum over 18 rows. It runs client-side in TypeScript. One precomputed GeoJSON file (`frontend/public/districts.geojson`) is the only data dependency. A FastAPI wrapper is optional and never blocking.
+**No backend on the critical path.** The scoring model is a weighted sum over 18 rows. It runs client-side in TypeScript. One precomputed GeoJSON file (`frontend/public/districts.geojson`) is the only data dependency. The FastAPI backend is optional and never blocking — it powers the AI assistant, forecast, and NL goal parsing.
 
 ```
-frontend/public/districts.geojson   (precomputed, committed)
+frontend/public/districts.geojson        (18 districts, raster_2024, committed)
+frontend/public/neighbourhoods.geojson   (211 STPU neighbourhoods, committed)
+frontend/public/adjacency.json           (18-node border graph, committed)
         │
         ▼
 frontend/src/lib/scoring.ts         (WLC engine, client-side)
+frontend/src/lib/reallocation.ts    (QP optimizer over 211 STPUs → 18 districts)
         │
         ▼
-React + Leaflet map + panels        (choropleth, scenario buttons, detail drawer)
+React + Leaflet map + panels        (choropleth, scenario buttons, detail drawer, planner)
+        │
+        ▼  (optional — never on the critical path)
+backend/llm/app.py                  (FastAPI: /api/chat, /api/explain, /api/parse-goal,
+                                     /api/summarize-plan, /api/forecast, /api/health)
 ```
 
 ---
@@ -33,17 +40,26 @@ The repo is built in parallel by **two Claude Code agents**. The core rule: **ne
 | Path | Owner | Notes |
 |------|-------|-------|
 | `frontend/src/types.ts` | **SHARED** | The contract. Change only by agreement — read it before writing any code. |
-| `frontend/public/districts.geojson` | **Agent A** | A commits a stub (2–3 districts) first so B is never blocked |
-| `build_data.py` | **Agent A** | Raster pipeline + census merge |
+| `frontend/public/districts.geojson` | **Agent A** | 18 districts, raster_2024, ageing_building_share on all |
+| `frontend/public/neighbourhoods.geojson` | **Agent A** | 211 STPU neighbourhoods |
+| `frontend/public/adjacency.json` | **Agent A** | 18-node border-adjacency graph |
+| `build_data.py` | **Agent A** | Raster pipeline + census merge → districts.geojson |
+| `build_neighbourhoods.py` | **Agent A** | Raster pipeline → neighbourhoods.geojson |
 | `weights_ahp.py` | **Agent A** | AHP weight derivation (run offline, paste output into scenarios.ts) |
+| `scripts/` | **Agent A** | build_adjacency.py, gen_districts_geojson.py |
 | `frontend/src/lib/scoring.ts` | **Agent A** | Pure TS, no React — B only imports `createScorer` |
+| `frontend/src/lib/reallocation.ts` | **Agent A** | QP optimizer — B only imports `createAllocator` |
 | `frontend/src/scenarios.ts` | **Agent A** | Scenario configs + AHP-derived weights |
-| `frontend/src/components/Map*.tsx` | **Agent B** | Leaflet / deck.gl map |
+| `backend/llm/` | **Agent A** | FastAPI LLM/forecast backend — B calls `/api/*` only |
+| `frontend/src/components/Map*.tsx` | **Agent B** | Leaflet map |
 | `frontend/src/components/ScenarioPanel.tsx` | **Agent B** | Scenario buttons |
 | `frontend/src/components/DetailPanel.tsx` | **Agent B** | District detail drawer |
+| `frontend/src/components/ForecastPanel.tsx` | **Agent B** | Forecast tab |
+| `frontend/src/components/ChatPanel.tsx` | **Agent B** | AI assistant panel |
+| `frontend/src/components/AssistantPanel.tsx` | **Agent B** | Assistant container |
 | `frontend/src/i18n/*.json` | **Agent B** | EN + Traditional Chinese strings |
 | `frontend/src/App.tsx` | **Agent B (sole integrator)** | All wiring lives here — Agent A never edits this |
-| `vite.config.ts`, styling, deploy | **Agent B** | |
+| `frontend/next.config.ts`, styling, deploy | **Agent B** | |
 | `docs/` | Either | |
 
 **If you are Agent A:** you own the data, model, and scoring logic. Do not touch `App.tsx`, components, or i18n files.
@@ -68,25 +84,38 @@ Each of the 18 features carries these properties — this is the `District` type
   "density": 5908,
   "area_km2": 85.8,
   "land": {
-    "residential": 0.30, "industrial": 0.10,
-    "commercial": 0.08, "green": 0.40,
-    "educational": 0.05, "other": 0.07
+    "residential":    0.30,
+    "industrial":     0.10,
+    "commercial":     0.08,
+    "agricultural":   0.03,
+    "recreational":   0.18,
+    "institutional":  0.05,
+    "misc":           0.04,
+    "infrastructure": 0.12,
+    "protected":      0.10
   },
-  "land_source": "raster_2024 | estimated"
+  "land_source": "raster_2024",
+  "ageing_building_share": 0.42
 }
 ```
+
+**Land categories — 9 total:**
+- **Reallocatable (6):** `residential`, `industrial`, `commercial`, `agricultural`, `recreational`, `institutional` — these are scenario targets and donor pools.
+- **Frozen (3):** `misc` (cemeteries/utilities/vacant), `infrastructure` (roads/rail/airport), `protected` (woodland/shrubland/wetland/reservoirs) — visible in the UI, never touched by the reallocation engine.
+
+All 18 districts carry `"land_source": "raster_2024"` and `ageing_building_share` (both are present and real — the estimated fallback and optional-stretch paths were never triggered).
 
 ### Real data sources
 
 | Data | Source |
 |------|--------|
-| District boundaries | `https://www.had.gov.hk/psi/hong-kong-administrative-boundaries/hksar_18_district_boundary.json` |
-| Demographics (65+, median age, density) | 2021 Census `DC_21C.xlsx` — `https://www.census2021.gov.hk/doc/DC_21C.xlsx` |
-| Land-use raster | Planning Dept LUHK 10m GeoTIFF — data.gov.hk, provider `hk-pland` (2024 edition) |
+| District boundaries | HK Home Affairs Dept, 18-polygon GeoJSON |
+| Demographics (65+, median age, density) | 2021 Census `DC_21C.xlsx` (values hardcoded in `build_data.py:46-65`) |
+| Land-use raster | Planning Dept LUMHK 2024 10m GeoTIFF (`data/raster_land_utilization/`) |
+| Building-age records | Buildings Dept CSV (`data/buildings/building_age.csv`) |
+| STPU neighbourhood boundaries | 2021 Census STPU GeoJSON files under `data/` |
 
-Hard-coded fallback census values are in `docs/MASTER_BUILD_DOC.md` Appendix A.
-
-If the raster pipeline doesn't finish within its timebox, ship the heuristic land-use fallback described in the master doc §3.3 — **always label it "estimated" in the UI.**
+Hard-coded fallback census values are in `docs/MASTER_BUILD_DOC.md` Appendix A. The raster pipeline has run successfully — all 18 districts and 211 neighbourhoods carry `land_source: "raster_2024"`.
 
 ---
 
@@ -100,11 +129,15 @@ viability(district, scenario) =
   + w_age          × norm(pct_over65)
   + w_headroom     × norm(residential_frac) × (1 − land[target])
   + w_area         × norm(area_km2)
+  + w_renewal      × norm(ageing_building_share)   [urban_renewal only]
+  + w_adjacency    × norm(neighbour-avg land[target])  [all scenarios, optional]
 ```
 
-- Weights are AHP-derived (run `weights_ahp.py` to regenerate).
-- The headroom `× (1 − land[target])` factor is critical — without it, a district already 50% green scores high as a green candidate. Do not remove it.
+- **Weights are AHP-derived** (run `weights_ahp.py` to regenerate; all CR < 0.07).
+- The headroom `× (1 − land[target])` factor is critical — without it, a district already 50% recreational scores high as a green candidate. Do not remove it.
 - Normalisation is min-max across all 18 districts, except density which uses `log₁₀` first.
+- The `renewal` term is active when `ageing_building_share` is present on all districts (it is, for all 18).
+- The `adjacency` term is active when `adjacency.json` is loaded (it is, in `App.tsx`). If the file is absent, scoring degrades gracefully.
 
 ---
 
@@ -112,14 +145,14 @@ viability(district, scenario) =
 
 Four pre-defined scenarios in `frontend/src/scenarios.ts`:
 
-| id | Target | Emphasis |
-|----|--------|---------|
-| `green_hk_2050` | green | headroom + area |
-| `industrial_growth` | industrial | area + displacement |
-| `education_hub` | educational | headroom dominant |
-| `urban_renewal` | residential | age proxy for renewal need |
+| id | `target` (LandCategory) | Emphasis | `goal_delta` |
+|----|--------|---------|---|
+| `green_hk_2050` | `recreational` | headroom + area + adjacency | +20% city-wide green |
+| `industrial_growth` | `industrial` | area + headroom | +15% city-wide industrial |
+| `education_hub` | `institutional` | headroom dominant + adjacency | +10% city-wide institutional |
+| `urban_renewal` | `residential` | age + renewal signal | — (no reallocation) |
 
-A scenario is `{ id, target, weights, label_key, description_key, horizon_year }`. Switching scenarios triggers a map recolour — nothing else changes.
+A scenario is `{ id, target, weights, label_key, description_key, horizon_year, goal_delta?, cluster_strength?, donor_weights? }`. Switching scenarios triggers a map recolour and (when `goal_delta` is set) a reallocation run in the planner tab.
 
 ---
 
@@ -129,19 +162,20 @@ EN + Traditional Chinese (not Simplified). Keys in `frontend/src/i18n/en.json` a
 
 ---
 
-## Hackathon build order
+## What's built (current state)
 
-Irreducible core — ship this before anything else:
+All core and stretch goals are complete:
 
-1. `districts.geojson` stub (Agent A) so Agent B is unblocked
-2. 18-district choropleth on the map (Agent B)
-3. One scenario recolours the map (both)
-4. District tap → detail panel with score + top-3 reasons (Agent B)
-5. Language toggle (Agent B)
+- 18-district choropleth map — real `raster_2024` land-use GeoJSON
+- WLC viability scoring with top-3 reasons (Stage 0 + 1 AHP weights)
+- All 4 scenarios, each with AHP-derived weights + adjacency term (Stage 3)
+- Land reallocation QP planner over 211 STPU neighbourhoods (beyond original scope)
+- District detail panel: land donut, demographics, score, future donut + trade list
+- Forecast tab (TabPFN structural estimate)
+- AI assistant: streaming chat, NL goal parsing, score explanations, Reddit social tool
+- EN / Traditional-Chinese toggle (147/147 keys)
 
-Then in priority order: real raster land-use data, second scenario, donut chart, all four scenarios, deploy.
-
-Cut list (drop in this order if behind): FastAPI wrapper, building-age stretch, district comparison, two of four scenarios.
+Not built: TOPSIS second-opinion toggle (Stage 4), district-vs-district comparison, historical forecast time series.
 
 ---
 
@@ -157,8 +191,7 @@ Cut list (drop in this order if behind): FastAPI wrapper, building-age stretch, 
 
 ## Important constraints
 
-- **Do not render 3D buildings or DTM terrain** at territory zoom — analytically meaningless and a performance risk. The existing PyVista viewer is shelved for this concept.
 - **Always show `land_source`** in the UI. Never hide whether data is real or estimated.
 - **Do not call viability scores "official"** — they are an illustrative decision-support model, not a planning assessment.
-- **No backend on the critical path.** The scoring runs in the browser. Do not block UI work on a server.
-- **No ML, no LLM for ranking.** The WLC model is the ranking engine. LLM is Stage 2 optional, only for natural-language input and explanation polish.
+- **No backend on the critical path.** The scoring and reallocation run in the browser. Do not block UI work on a server. All `/api/*` calls must degrade gracefully when the backend is not running.
+- **The WLC model does the ranking — not the LLM.** The AI assistant explains, summarises, and parses goals, but never scores or ranks districts.
