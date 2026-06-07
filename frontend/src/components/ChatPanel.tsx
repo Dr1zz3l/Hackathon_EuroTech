@@ -159,11 +159,13 @@ export default function ChatPanel({
         </button>
       </header>
 
-      {/* ── Assistant tab ─────────────────────────────────────────────── */}
-      {tab === 'assistant' ? (
+      {/* ── Assistant tab — always mounted so chat history survives tab switches */}
+      <div className={tab === 'assistant' ? 'flex-1 overflow-hidden' : 'hidden'}>
         <AssistantPanel onMapCommand={onMapCommand} getAppState={getAppState} />
-      ) : (
-        /* ── Planner tab (unchanged behaviour) ─────────────────────────── */
+      </div>
+
+      {/* ── Planner tab (unchanged behaviour) ─────────────────────────── */}
+      {tab === 'planner' && (
         <>
           <div className="flex-1 overflow-y-auto p-4 flex flex-col">
             {plannerMessage ? (
