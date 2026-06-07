@@ -13,12 +13,9 @@
   "scenario.urban_renewal.description": "重建老化低密度住宅存量",
 
   "map.legend.title": "主要土地用途",
-  "map.legend.viability": "可行性評分",
   "map.legend.future": "預測土地用途",
   "map.legend.low": "低",
   "map.legend.high": "高",
-  "map.mode.future": "未來",
-  "map.mode.viability": "可行性",
 
   "land.residential": "住宅",
   "land.industrial": "工業",
@@ -30,8 +27,6 @@
   "land.infrastructure": "基礎設施（道路／鐵路）",
   "land.protected": "受保護（郊野公園／濕地）",
 
-  "panel.score": "可行性評分",
-  "panel.score.disclaimer": "示意性決策支援模型 — 並非官方規劃評估。",
   "panel.land.title": "現有土地用途（2024）",
   "panel.future.title": "預測土地用途",
   "panel.land.source.estimated": "⚠ 土地用途數據：估算（啟發式）",
@@ -44,14 +39,6 @@
   "panel.area": "面積",
   "panel.median_age": "中位年齡",
   "panel.pct_over65": "65歲或以上",
-  "panel.reasons.title": "評分主要原因",
-
-  "reason.headroom": "{value} → 有增長空間",
-  "reason.large_area": "大型地區（{value}）→ 整體影響力高",
-  "reason.low_density": "密度較低（{value}）→ 遷移影響較少",
-  "reason.age_factor": "{value} → 遷移敏感度信號",
-  "reason.ageing_stock": "{value} → 重建候選地區",
-  "reason.adjacency": "鄰區目標用途密集（{value}）→ 連片發展",
 
   "lang.toggle": "EN",
   "close": "關閉",
@@ -136,15 +123,13 @@
   "panel.right.expand": "開啟面板",
   "panel.right.collapse": "收起面板",
   "panel.right.detail.empty.title": "點選分區開始。",
-  "panel.right.detail.empty.sub": "可行性概覽會在此顯示。",
+  "panel.right.detail.empty.sub": "分區概覽會在此顯示。",
 
   "styling.layer": "圖層",
   "styling.opacity": "填充透明度",
   "styling.palette": "色板",
   "styling.palette.land": "土地用途",
-  "styling.palette.scenario": "可行性評分",
   "styling.palette.land.help": "按主要土地類別為每區上色。",
-  "styling.palette.scenario.help": "按目前情境下的可行性為每區上色。",
   "styling.reset": "回復預設",
 
   "app.loading.map": "載入地圖中…",

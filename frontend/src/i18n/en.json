@@ -13,12 +13,9 @@
   "scenario.urban_renewal.description": "Renew ageing low-density residential stock",
 
   "map.legend.title": "Dominant land use",
-  "map.legend.viability": "Viability score",
   "map.legend.future": "Projected land use",
   "map.legend.low": "Low",
   "map.legend.high": "High",
-  "map.mode.future": "Future",
-  "map.mode.viability": "Viability",
 
   "land.residential": "Residential",
   "land.industrial": "Industrial",
@@ -30,8 +27,6 @@
   "land.infrastructure": "Infrastructure",
   "land.protected": "Protected (country park / wetland)",
 
-  "panel.score": "Viability score",
-  "panel.score.disclaimer": "Illustrative decision-support model — not an official planning assessment.",
   "panel.land.title": "Current land use (2024)",
   "panel.future.title": "Projected land use",
   "panel.land.source.estimated": "⚠ Land-use data: estimated (heuristic)",
@@ -44,14 +39,6 @@
   "panel.area": "Area",
   "panel.median_age": "Median age",
   "panel.pct_over65": "Aged 65+",
-  "panel.reasons.title": "Top reasons for this score",
-
-  "reason.headroom": "{value} → room to grow",
-  "reason.large_area": "Large district ({value}) → high aggregate impact",
-  "reason.low_density": "Lower density ({value}) → less displacement",
-  "reason.age_factor": "{value} → displacement-sensitivity signal",
-  "reason.ageing_stock": "{value} → renewal candidate",
-  "reason.adjacency": "Neighbours rich in target use ({value}) → cluster / corridor",
 
   "lang.toggle": "繁中",
   "close": "Close",
@@ -136,15 +123,13 @@
   "panel.right.expand": "Open panel",
   "panel.right.collapse": "Collapse panel",
   "panel.right.detail.empty.title": "Tap a district to begin.",
-  "panel.right.detail.empty.sub": "The viability profile appears here.",
+  "panel.right.detail.empty.sub": "The district profile appears here.",
 
   "styling.layer": "Layer",
   "styling.opacity": "Fill opacity",
   "styling.palette": "Palette",
   "styling.palette.land": "Land use",
-  "styling.palette.scenario": "Viability score",
   "styling.palette.land.help": "Each district coloured by its dominant land category.",
-  "styling.palette.scenario.help": "Each district coloured by viability under the active scenario.",
   "styling.reset": "Reset to default",
 
   "app.loading.map": "Loading map…",

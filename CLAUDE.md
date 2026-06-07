@@ -167,13 +167,13 @@ EN + Traditional Chinese (not Simplified). Keys in `frontend/src/i18n/en.json` a
 All core and stretch goals are complete:
 
 - 18-district choropleth map — real `raster_2024` land-use GeoJSON
-- WLC viability scoring with top-3 reasons (Stage 0 + 1 AHP weights)
+- WLC viability engine (AHP weights + adjacency) — runs internally, drives reallocation district weighting (Stage 0 + 1 + 3); score not shown as UI panel
 - All 4 scenarios, each with AHP-derived weights + adjacency term (Stage 3)
 - Land reallocation QP planner over 211 STPU neighbourhoods (beyond original scope)
-- District detail panel: land donut, demographics, score, future donut + trade list
+- District detail panel: land donut, demographics, future donut + trade list
 - Forecast tab (TabPFN structural estimate)
 - AI assistant: streaming chat, NL goal parsing, score explanations, Reddit social tool
-- EN / Traditional-Chinese toggle (147/147 keys)
+- EN / Traditional-Chinese toggle (135/135 keys)
 
 Not built: TOPSIS second-opinion toggle (Stage 4), district-vs-district comparison, historical forecast time series.
 
@@ -182,10 +182,10 @@ Not built: TOPSIS second-opinion toggle (Stage 4), district-vs-district comparis
 ## Demo script
 
 1. Open app → HK map, 18 districts coloured by dominant land use
-2. Tap **"Industrial Growth"** → map recolours by viability score
-3. Tap a district (e.g. Tuen Mun) → detail panel: land mix, demographics, score, top-3 reasons
+2. Tap **"Industrial Growth"** → reallocation runs, future land projections update
+3. Tap a district (e.g. Tuen Mun) → detail panel: land mix, demographics, future donut + trade list
 4. Switch language → everything flips to Traditional Chinese
-5. Tap **"Green HK 2050"** → a different set of districts highlights
+5. Tap **"Green HK 2050"** → different districts gain green-space allocation
 
 ---
 

@@ -8,15 +8,15 @@ An interactive map of Hong Kong's 18 administrative districts that takes a city-
 
 ## What it does
 
-- **Choropleth map** — all 18 districts coloured by land-use mix or viability score, powered by real HK Planning Dept raster data (LUMHK 2024, 10 m resolution).
+- **Choropleth map** — all 18 districts coloured by land-use mix or demographic metric, powered by real HK Planning Dept raster data (LUMHK 2024, 10 m resolution).
 - **Scenario engine** — pick one of four AHP-weighted planning scenarios (Green HK 2050, Industrial Growth, Education Hub, Urban Renewal) or type a natural-language goal and let the AI assistant parse it into a scenario.
-- **Transparent scoring** — each district gets a weighted-sum viability score with a top-3 reason breakdown (displacement risk, demographic headroom, land slack, area). No black box.
+- **WLC viability engine** — AHP-derived weighted-sum scores (displacement, headroom, area, ageing stock, adjacency) drive the reallocation planner's district weighting. Weights are transparent and scenario-specific.
 - **Land reallocation planner** — a genuine bounded quadratic programme (KKT + bisection) distributes a planning target across 211 sub-district neighbourhoods, then aggregates back to districts. Shows what each district donates and what it receives.
 - **Forecast** — compound-growth projection (Low / Expected / High) driven by **measured 2011–2021 census CAGRs** for all 18 districts and 189 neighbourhoods. Future `median_age` / `pct_over65` indicators are predicted by TabPFN trained on the full **2011/2016/2021 temporal panel** (600+ rows, `year` as a feature) — a learned time-trend, not a cross-sectional proxy. Planning recommendations cover housing supply, ageing, open space, and school demand.
 - **AI assistant** — streaming Claude chat with tools: goal parsing, score explanations, plan summaries, social-listening sentiment from Reddit, and cross-sectional demographic prediction.
-- **EN / Traditional Chinese** — full bilingual UI, 147/147 key parity.
+- **EN / Traditional Chinese** — full bilingual UI, 135/135 key parity.
 
-**Demo flow:** open the map → select *Industrial Growth* → tap Tuen Mun → see score + top-3 reasons + future land donut → switch to 廣東話 → type "more green space by 2050" in the assistant.
+**Demo flow:** open the map → select *Industrial Growth* → tap Tuen Mun → see land mix, demographics + future land donut / trade list → switch to 廣東話 → type "more green space by 2050" in the assistant.
 
 ---
 
@@ -131,9 +131,13 @@ All data is real and locally precomputed — no live API calls for the map itsel
 | HK Census 2011 & 2016 STPU GeoJSONs | Historical population + demographics for measured CAGRs and TabPFN temporal panel |
 | HK Buildings Dept records | Ageing-building share (urban-renewal scoring term) |
 
-The GeoJSON files in `frontend/public/` are precomputed and committed — you do not need to rerun the pipeline to use the app. To regenerate:
+The GeoJSON files in `frontend/public/` are precomputed and committed — you do not need to rerun the pipeline to use the app. To regenerate from raw data:
 
 ```bash
+# 1. Download all raw source datasets (skips files that already exist)
+uv run python main.py
+
+# 2. Run the build pipeline
 uv run python build_data.py               # 18 districts → districts.geojson
 uv run python build_neighbourhoods.py     # 211 STPUs → neighbourhoods.geojson
 uv run python build_population_history.py # population_history.csv + census_panel.json

@@ -11,7 +11,7 @@ Judges compare this against `git shortlog -sn`, so keep it honest.
 
 | Member | GitHub handle | Main contributions |
 |---|---|---|
-| Timo Weiss | `Dr1zz3l` | Lead integration: Leaflet map & React components, `App.tsx` wiring, i18n, scoring & reallocation libs, LLM backend, PyVista visualization (39 commits) |
+| Timo Weiss | `Dr1zz3l` | Lead integration: Leaflet map & React components, `App.tsx` wiring, i18n, scoring & reallocation libs, LLM backend (39 commits) |
 | Frans Hietaranta | `hietarf` | Documentation — README, CLAUDE.md, pitch video guide (11 commits) |
 | Till Laube | `till-laube` | LLM/data backend, scoring lib, Python packaging (9 commits) |
 | Vincent Fiedler | `viincece` | Frontend components & app shell, LLM backend, project config (6 commits) |
@@ -21,12 +21,12 @@ Judges compare this against `git shortlog -sn`, so keep it honest.
 ## 2. What is fully working
 Features that run end-to-end on the live app, with real data and real logic.
 
-- **18-district choropleth map** — loads real `raster_2024` land-use GeoJSON (`frontend/public/districts.geojson`) and colours all 18 districts by dominant land use or viability score.
-- **WLC viability scoring** (`frontend/src/lib/scoring.ts`) — input: District + Scenario; output: score, per-term breakdown, top-3 reasons. Real weighted-sum math, min-max normalised across all 18 districts; log₁₀ density transform for displacement.
+- **18-district choropleth map** — loads real `raster_2024` land-use GeoJSON (`frontend/public/districts.geojson`) and colours all 18 districts by dominant land use (current or projected allocation).
+- **WLC viability engine** (`frontend/src/lib/scoring.ts`) — input: District + Scenario; output: score and per-term breakdown. Real weighted-sum math, min-max normalised across all 18 districts; log₁₀ density transform for displacement. The score is consumed internally by the reallocation planner as a district weighting, not shown as a per-district UI panel.
 - **4 AHP-derived scenarios** (`frontend/src/scenarios.ts`) — weights derived from real AHP pairwise matrices in `weights_ahp.py` (all consistency ratios CR < 0.07). Switching scenarios re-scores and recolours the map live.
 - **Land reallocation / planner** (`frontend/src/lib/reallocation.ts`) — genuine bounded quadratic program solved via closed-form KKT + bisection on the dual variable ν, run over 211 STPU neighbourhoods and aggregated to 18 districts. Conservation of land fractions is asserted in dev.
-- **District detail panel** — land-mix donut, demographics (population, density, median age, %65+), score + reason cards, future-state donut + trade list after allocation; `land_source` badge always shown.
-- **EN / Traditional-Chinese language toggle** — full 147/147 key parity across `en.json` and `yue.json`; real `t()` lookup with key fallback.
+- **District detail panel** — land-mix donut, demographics (population, density, median age, %65+), future-state donut + trade list after allocation; `land_source` badge always shown.
+- **EN / Traditional-Chinese language toggle** — full 135/135 key parity across `en.json` and `yue.json`; real `t()` lookup with key fallback.
 - **LLM assistant (Claude)** — streaming chat (`/api/chat`), NL goal→scenario parsing (`/api/parse-goal`), district score explanations (`/api/explain`), plan summaries (`/api/summarize-plan`); runs against the local FastAPI backend with a real Anthropic API key.
 - **TabPFN-assisted forecast & cross-sectional prediction** (`/api/forecast`, `/api/predict`) — real `TabPFNRegressor` inference when `TABPFN_TOKEN` is set. The forecast now trains TabPFN on a **temporal panel** (2011/2016/2021 census snapshots stacked with `year` as a feature) so demographic projections (`median_age`, `pct_over65`) extrapolate a learned time-trend rather than a 2021-only cross-section.
 - **Historical population CAGR** (`backend/llm/history.py`, `data/population/population_history.csv`) — real measured compound annual growth rates derived from the 2011→2016→2021 census series for all 18 districts and 189 STPU neighbourhoods; log-linear fit over all three years. The `Low/High` forecast band is computed from actual cross-area rate dispersion (separate for districts and STPUs). The historical-trend path is **fully active** and overrides the structural estimate for all areas with a measured series.
