@@ -146,25 +146,23 @@ interface MapViewProps {
   dynamicLayers?: DynamicLayer[]
 }
 
-// ─── Delta label builder (shared between district and neighbourhood layers) ───
+// ─── Tooltip content builder (name + optional land-use delta) ────────────────
 
-function buildDeltaMarker(
-  d: District,
+function buildTooltipContent(
+  name: string,
   alloc: import('../types').DistrictAllocation | undefined,
-  lyr: L.Layer,
-): L.Marker | null {
-  if (!alloc) return null
+): string {
+  if (!alloc) return name
 
   const delta = alloc.delta
   type Cat = keyof typeof delta
   const cats = Object.keys(delta) as Cat[]
   const gainCat = cats.reduce((a, b) => delta[a] >= delta[b] ? a : b)
   const lossCat = cats.reduce((a, b) => delta[a] <= delta[b] ? a : b)
-
   const gainPct = +(delta[gainCat] * 100).toFixed(1)
   const lossPct = +(delta[lossCat] * 100).toFixed(1)
 
-  if (Math.abs(gainPct) < 0.1 && Math.abs(lossPct) < 0.1) return null
+  if (Math.abs(gainPct) < 0.1 && Math.abs(lossPct) < 0.1) return name
 
   const CAT_LABEL: Record<string, string> = {
     residential: 'Res', industrial: 'Ind', commercial: 'Com',
@@ -173,39 +171,18 @@ function buildDeltaMarker(
   }
 
   const gainLine = gainPct >= 0.1
-    ? `<div style="color:#16a34a;font-weight:600">+${gainPct}% ${CAT_LABEL[gainCat] ?? gainCat}</div>`
+    ? `<span style="display:block;color:#16a34a;font-weight:600;font-family:ui-monospace,monospace;font-size:10px">+${gainPct}% ${CAT_LABEL[gainCat] ?? gainCat}</span>`
     : ''
   const lossLine = lossPct <= -0.1
-    ? `<div style="color:#dc2626">${lossPct}% ${CAT_LABEL[lossCat] ?? lossCat}</div>`
+    ? `<span style="display:block;color:#dc2626;font-family:ui-monospace,monospace;font-size:10px">${lossPct}% ${CAT_LABEL[lossCat] ?? lossCat}</span>`
     : ''
-  const html = gainLine + lossLine
-  if (!html) return null
 
-  const pathLayer = lyr as unknown as L.Polygon
-  const bounds = typeof pathLayer.getBounds === 'function' ? pathLayer.getBounds() : null
-  const center = bounds ? bounds.getCenter() : null
-  if (!center) return null
+  if (!gainLine && !lossLine) return name
 
-  const icon = L.divIcon({
-    className: '',
-    html: `<div style="
-        transform:translate(-50%,-50%);
-        display:inline-block;
-        font-size:11px;line-height:1.4;text-align:center;
-        font-family:ui-monospace,monospace;
-        background:rgba(250,250,250,0.92);
-        color:#111;
-        padding:3px 6px;border-radius:4px;
-        border:1px solid rgba(0,0,0,0.1);
-        white-space:nowrap;pointer-events:none;
-        box-shadow:0 1px 4px rgba(0,0,0,0.12);
-      ">${html}</div>`,
-    iconSize: [0, 0],
-    iconAnchor: [0, 0],
-  })
-
-  void d  // suppress unused warning (name available for debugging)
-  return L.marker(center, { icon, interactive: false, zIndexOffset: 500 })
+  return `<span style="display:block;font-weight:600">${name}</span>`
+       + `<span style="display:block;margin-top:3px;padding-top:3px;border-top:1px solid rgba(0,0,0,0.08)">`
+       + gainLine + lossLine
+       + `</span>`
 }
 
 // ─── Dynamic (agent-created) layer builder ────────────────────────────────────
@@ -409,12 +386,11 @@ export default function MapView({
       zoom: 10,
       zoomControl: true,
       attributionControl: true,
-      // Fractional zoom snapping → buttery pinch/scroll zoom. The district↔
-      // neighbourhood threshold (12.5) is still landed cleanly on 0.25 steps.
       zoomSnap: 0.25,
       zoomDelta: 0.5,
-      wheelPxPerZoomLevel: 150,
+      wheelPxPerZoomLevel: 120,
       preferCanvas: true,
+      easeLinearity: 0.5,
     })
 
     // ── Cross-fade panes ───────────────────────────────────────────────────────
@@ -499,8 +475,6 @@ export default function MapView({
       geoLayerRef.current = null
     }
 
-    const deltaMarkers: L.Marker[] = []
-
     const layer = L.geoJSON(geojson as unknown as GeoJSON.GeoJsonObject, {
       pane: 'districtsPane',
       style: (feature) => {
@@ -514,7 +488,15 @@ export default function MapView({
           && !selectedDistrict.tpu_code  // only highlight adjacency at district level
           && (adjacency[selectedDistrict.name] ?? []).includes(d.name)
 
-        const fillColor = dominantLandColour(d)
+        let fillColor: string
+        if (useScoreRamp) {
+          fillColor = scoreColour(scoreMap.current.get(d.name)?.score ?? 0)
+        } else if (mapMode === 'future' && allocationResult) {
+          const a = allocationResult.byDistrict.get(d.name)
+          fillColor = a ? dominantLandColourFromUse(a.future) : dominantLandColour(d)
+        } else {
+          fillColor = dominantLandColour(d)
+        }
 
         // Assistant highlight takes top visual precedence.
         const hl = highlightRef.current
@@ -557,35 +539,29 @@ export default function MapView({
       onEachFeature: (feature, lyr) => {
         const d = feature.properties as District
         const displayName = locale === 'yue' ? d.name_tc : d.name
+        const alloc = (!useScoreRamp && mapMode === 'future' && allocationResult)
+          ? allocationResult.byDistrict.get(d.name)
+          : undefined
 
-        lyr.bindTooltip(displayName, {
+        lyr.bindTooltip(buildTooltipContent(displayName, alloc), {
           permanent: false,
           sticky: true,
           direction: 'top',
-          offset: [0, -4],
+          offset: [0, -8],
         })
-
-        // Pre-build delta marker for this district; shown/hidden on hover only.
-        let deltaMarker: L.Marker | null = null
-        if (activeScenario && allocationResult) {
-          const alloc = allocationResult.byDistrict.get(d.name)
-          deltaMarker = buildDeltaMarker(d, alloc, lyr)
-          if (deltaMarker) deltaMarkers.push(deltaMarker)
-        }
 
         lyr.on({
           click: () => onSelectDistrict(d),
           mouseover: (e) => {
             const l = e.target as L.Path
             const hoverStyle: L.PathOptions = { fillOpacity: 0.85 * districtsOpacity, weight: 2 }
-            if (allocationResult) {
-              const alloc = allocationResult.byDistrict.get(d.name)
-              if (alloc) hoverStyle.fillColor = dominantLandColourFromUse(alloc.future)
+            if (!useScoreRamp && mapMode === 'future' && allocationResult) {
+              const a = allocationResult.byDistrict.get(d.name)
+              if (a) hoverStyle.fillColor = dominantLandColourFromUse(a.future)
             }
             // Lift the hovered polygon so its full outline reads above neighbours.
             l.setStyle(hoverStyle)
             l.bringToFront()
-            if (deltaMarker) deltaMarker.addTo(map)
           },
           mouseout: (e) => {
             const l = e.target as L.Path
@@ -599,7 +575,6 @@ export default function MapView({
             // Keep the selected outline on top after the hover ends.
             l.setStyle(baseStyle)
             raiseHighlighted()
-            if (deltaMarker) deltaMarker.remove()
           },
         })
       },
@@ -633,9 +608,6 @@ export default function MapView({
       boundsFitRef.current = true
     }
 
-    return () => {
-      deltaMarkers.forEach(m => m.remove())
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeScenario, allocationResult, selectedDistrict,
@@ -652,7 +624,7 @@ export default function MapView({
       nbhdLayerRef.current = null
     }
 
-    const nbhdDeltaMarkers: L.Marker[] = []
+    const useScoreRamp = paletteMode === 'scenario' && activeScenario != null && mapMode === 'viability'
 
     const layer = L.geoJSON(nbhdGeojson as unknown as GeoJSON.GeoJsonObject, {
       pane: 'nbhdPane',
@@ -660,7 +632,15 @@ export default function MapView({
         const d = feature?.properties as District
         const isSelected = d.name === selectedDistrict?.name
 
-        const fillColor = dominantLandColour(d)
+        let fillColor: string
+        if (useScoreRamp) {
+          fillColor = scoreColour(nbhdScoreMap.current.get(d.name)?.score ?? 0)
+        } else if (mapMode === 'future' && nbhdAllocationResult) {
+          const a = nbhdAllocationResult.byDistrict.get(d.name)
+          fillColor = a ? dominantLandColourFromUse(a.future) : dominantLandColour(d)
+        } else {
+          fillColor = dominantLandColour(d)
+        }
 
         // Assistant highlight takes top visual precedence.
         const hl = highlightRef.current
@@ -694,35 +674,29 @@ export default function MapView({
       onEachFeature: (feature, lyr) => {
         const d = feature.properties as District
         const displayName = locale === 'yue' ? d.name_tc : d.name
+        const alloc = (!useScoreRamp && mapMode === 'future' && nbhdAllocationResult)
+          ? nbhdAllocationResult.byDistrict.get(d.name)
+          : undefined
 
-        lyr.bindTooltip(displayName, {
+        lyr.bindTooltip(buildTooltipContent(displayName, alloc), {
           permanent: false,
           sticky: true,
           direction: 'top',
-          offset: [0, -4],
+          offset: [0, -8],
         })
-
-        // Pre-build delta marker for this neighbourhood; shown/hidden on hover only.
-        let deltaMarker: L.Marker | null = null
-        if (activeScenario && nbhdAllocationResult) {
-          const alloc = nbhdAllocationResult.byDistrict.get(d.name)
-          deltaMarker = buildDeltaMarker(d, alloc, lyr)
-          if (deltaMarker) nbhdDeltaMarkers.push(deltaMarker)
-        }
 
         lyr.on({
           click: () => onSelectDistrict(d),
           mouseover: (e) => {
             const l = e.target as L.Path
             const hoverStyle: L.PathOptions = { fillOpacity: 0.88 * districtsOpacity, weight: 1.5 }
-            if (nbhdAllocationResult) {
-              const alloc = nbhdAllocationResult.byDistrict.get(d.name)
-              if (alloc) hoverStyle.fillColor = dominantLandColourFromUse(alloc.future)
+            if (!useScoreRamp && mapMode === 'future' && nbhdAllocationResult) {
+              const a = nbhdAllocationResult.byDistrict.get(d.name)
+              if (a) hoverStyle.fillColor = dominantLandColourFromUse(a.future)
             }
             // Lift the hovered cell so its full outline reads above neighbours.
             l.setStyle(hoverStyle)
             l.bringToFront()
-            if (deltaMarker) deltaMarker.addTo(map)
           },
           mouseout: (e) => {
             const l = e.target as L.Path
@@ -735,7 +709,6 @@ export default function MapView({
             // Keep the selected outline on top after the hover ends.
             l.setStyle(baseStyle)
             raiseHighlighted()
-            if (deltaMarker) deltaMarker.remove()
           },
         })
       },
@@ -762,9 +735,6 @@ export default function MapView({
     raiseHighlighted()
     syncLevels()
 
-    return () => {
-      nbhdDeltaMarkers.forEach(m => m.remove())
-    }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
     activeScenario, nbhdAllocationResult, selectedDistrict,

@@ -49,6 +49,7 @@ import {
 } from './lib/dynamicLayers'
 
 import ScenarioPanel from './components/ScenarioPanel'
+import IntroOverlay from './components/IntroOverlay'
 import ChatPanel, { type PlannerMessage } from './components/ChatPanel'
 import DetailPanel from './components/DetailPanel'
 import DetailEmptyState from './components/DetailEmptyState'
@@ -543,6 +544,8 @@ function AppInner() {
   return (
     <div className="w-full h-full flex flex-col bg-canvas-soft text-ink">
 
+      <IntroOverlay />
+
       {/* ── Nav bar ──────────────────────────────────────────────────── */}
       <header className="relative shrink-0 h-16 bg-canvas hairline flex items-center justify-between px-6 z-20">
         <div className="absolute inset-0 bg-brand-mesh-soft opacity-50 pointer-events-none" />
@@ -561,6 +564,25 @@ function AppInner() {
         </div>
 
         <div className="relative flex items-center gap-2">
+          {/* City selector — HK live; other cities signal future multi-city support */}
+          <div className="relative hidden sm:block">
+            <select
+              className="
+                h-8 pl-3 pr-7 rounded-md text-[12px] font-medium
+                bg-canvas-soft border border-hairline text-body
+                appearance-none cursor-default focus:outline-none
+              "
+              defaultValue="hk"
+              onChange={() => {}}
+            >
+              <option value="hk">🇭🇰 Hong Kong</option>
+              <option value="sg" disabled>Singapore — soon</option>
+              <option value="sh" disabled>Shanghai — soon</option>
+              <option value="tk" disabled>Tokyo — soon</option>
+              <option value="db" disabled>Dubai — soon</option>
+            </select>
+            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-mute text-[10px]">▾</span>
+          </div>
           <LanguageToggle />
         </div>
       </header>
