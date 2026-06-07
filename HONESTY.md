@@ -83,3 +83,4 @@ What we would build next, and the weak spots we already know about. Naming these
 - **Viability scores are illustrative** and not an official planning assessment. Weights are expert-authored AHP judgments, not empirically validated.
 - **Land-use heuristic fallback is untested in production** — all current data is real raster so the code path that generates "estimated" fractions has never been exercised end-to-end.
 - **Language preference is not persisted** across page reloads (in-memory React state only).
+- **Reddit social-listening — future, not active.** A scaffolded `social_listening` chat tool exists in the codebase (`backend/llm/social.py`) but is **not part of the demo or surfaced in the UI**. Bringing community-sentiment evidence into the assistant is a planned next step, not a working feature today.
