@@ -77,6 +77,8 @@
   "sidebar.chat.collapse": "收起對話",
   "sidebar.chat.tab.assistant": "助手",
   "sidebar.chat.tab.planner": "規劃師",
+  "sidebar.chat.new": "新增方案",
+  "sidebar.chat.remove": "刪除方案",
 
   "assistant.empty": "詢問關於地圖的問題。",
   "assistant.empty_sub": "我可以回答關於 18 區的問題，並在地圖上標示它們。",

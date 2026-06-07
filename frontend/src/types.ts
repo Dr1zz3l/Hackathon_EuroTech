@@ -122,7 +122,9 @@ export type ScenarioId =
   | 'education_hub'
   | 'urban_renewal'
   /** Stage 2 — synthetic scenario built from a free-text LLM goal. */
-  | 'custom';
+  | 'custom'
+  /** Stage 2 — unique per-session id assigned in App.tsx when a goal is submitted. */
+  | `custom-${string}`;
 
 /**
  * A pre-defined planning scenario.

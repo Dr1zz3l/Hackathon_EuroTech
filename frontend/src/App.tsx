@@ -37,7 +37,7 @@ import { createAllocator, aggregateToDistricts } from './lib/reallocation'
 import { SCENARIOS } from './scenarios'
 import type {
   AdjacencyMap, AllocationResult, Allocator,
-  District, Scenario, Scorer,
+  District, Scenario, ScenarioId, Scorer,
 } from './types'
 import {
   buildSyntheticScenario, buildPlanSummaryPayload,
@@ -182,7 +182,14 @@ function AppInner() {
   // ── Scenario / selection state ───────────────────────────────────────────────
   const [activeScenario,   setActiveScenario]   = useState<Scenario | null>(null)
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null)
-  const [plannerMessage, setPlannerMessage] = useState<PlannerMessage | null>(null)
+  // Multi-session custom scenarios: each LLM goal creates a new entry keyed by
+  // a unique `custom-N` id. The active scenario's planner output is derived below.
+  const [customScenarios,  setCustomScenarios]  = useState<Scenario[]>([])
+  const [plannerMessages,  setPlannerMessages]  = useState<Record<string, PlannerMessage>>({})
+  const customIdRef = useRef(0)
+  // Derived: planner output for whichever scenario is currently active (null for presets)
+  const plannerMessage: PlannerMessage | null =
+    activeScenario ? (plannerMessages[activeScenario.id] ?? null) : null
 
   // ── Sidebar / panel state ────────────────────────────────────────────────────
   const [chatOpen,   setChatOpen]   = useState(true)   // open by default — planner is wired
@@ -270,14 +277,18 @@ function AppInner() {
 
   // ── LLM goal handler ─────────────────────────────────────────────────────────
   // Orchestrates: parse-goal → synthetic scenario → reallocation → summarize-plan
+  // Each submission creates a new persistent custom scenario session.
   const handleGoal = useCallback(async (text: string) => {
     if (!scorer || !allocator) throw new Error('Data not loaded yet')
 
     // 1. Ask the LLM to parse the goal
     const parsed = await parseGoal(text, locale as Locale)
 
-    // 2. Build synthetic scenario and activate it immediately (map recolours)
-    const scenario = buildSyntheticScenario(parsed)
+    // 2. Build synthetic scenario, stamp a unique id, register it, and activate
+    const base = buildSyntheticScenario(parsed)
+    const id = `custom-${++customIdRef.current}` as ScenarioId
+    const scenario: Scenario = { ...base, id }
+    setCustomScenarios(prev => [scenario, ...prev])  // newest first (nearest "State today")
     setActiveScenario(scenario)
 
     // Determine which weight keys the LLM explicitly overrode
@@ -292,13 +303,13 @@ function AppInner() {
       weights: scenario.weights,
       overriddenKeys,
     }
-    setPlannerMessage({ ...msgBase, prose: null, loading: true })
+    setPlannerMessages(prev => ({ ...prev, [id]: { ...msgBase, prose: null, loading: true } }))
 
     // 3. Compute allocation synchronously (don't depend on useMemo render cycle)
     const allocation = allocator.allocate(scenario, scorer)
 
     if (!allocation) {
-      setPlannerMessage({ ...msgBase, prose: null, loading: false })
+      setPlannerMessages(prev => ({ ...prev, [id]: { ...msgBase, prose: null, loading: false } }))
       return
     }
 
@@ -306,18 +317,34 @@ function AppInner() {
     try {
       const payload = buildPlanSummaryPayload(scenario, allocation, text, locale as Locale, districts)
       const prose = await summarizePlan(payload)
-      setPlannerMessage({ ...msgBase, prose, loading: false })
+      setPlannerMessages(prev => ({ ...prev, [id]: { ...msgBase, prose, loading: false } }))
     } catch {
       // Summarize failed — show rationale only, no prose
-      setPlannerMessage({ ...msgBase, prose: null, loading: false })
+      setPlannerMessages(prev => ({ ...prev, [id]: { ...msgBase, prose: null, loading: false } }))
     }
   }, [scorer, allocator, locale, districts])
 
-  // ── Clear planner message when a preset scenario is selected ─────────────────
+  // ── Select any scenario (preset, custom, or null = "State today") ────────────
+  // Planner output is now derived from plannerMessages[activeScenario.id], so no
+  // explicit clear needed — switching away from a custom scenario automatically
+  // shows null for presets, and restores the stored output on return.
   const handleSelectPreset = useCallback((s: Scenario | null) => {
     setActiveScenario(s)
-    setPlannerMessage(null)
   }, [])
+
+  // ── New scenario — return to "State today" so a fresh goal can be entered ────
+  const handleNewScenario = useCallback(() => {
+    setActiveScenario(null)
+  }, [])
+
+  // ── Remove scenario — deletes the active custom scenario and its planner output
+  const handleRemoveScenario = useCallback(() => {
+    const cur = activeScenario
+    if (!cur || !cur.id.startsWith('custom')) return
+    setCustomScenarios(prev => prev.filter(s => s.id !== cur.id))
+    setPlannerMessages(prev => { const n = { ...prev }; delete n[cur.id]; return n })
+    setActiveScenario(null)
+  }, [activeScenario])
 
   // ── Layer mutation helpers ───────────────────────────────────────────────────
   // Agent-created layers carry a `dyn-` id prefix and live in their own state.
@@ -590,6 +617,7 @@ function AppInner() {
       {/* ── Scenario rail ────────────────────────────────────────────── */}
       <ScenarioPanel
         activeScenario={activeScenario}
+        customScenarios={customScenarios}
         onSelect={handleSelectPreset}
       />
 
@@ -604,6 +632,9 @@ function AppInner() {
           plannerMessage={plannerMessage}
           onMapCommand={handleMapCommand}
           getAppState={getAppState}
+          onNewScenario={handleNewScenario}
+          onRemoveScenario={handleRemoveScenario}
+          canRemove={!!activeScenario && activeScenario.id.startsWith('custom')}
         />
 
         {/* Left: layers panel */}

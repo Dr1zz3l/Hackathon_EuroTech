@@ -25,6 +25,8 @@ import {
   ChatIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
+  PlusIcon,
+  TrashIcon,
 } from './Icons'
 
 // ─── Types ──────────────────────────────────────────────────────────────────
@@ -57,6 +59,12 @@ interface ChatPanelProps {
   onMapCommand: (cmd: MapCommand) => void
   /** Returns a live app-state snapshot at call-time for the assistant. */
   getAppState: () => AppState
+  /** Deselect the active scenario and return to "State today". */
+  onNewScenario: () => void
+  /** Delete the active custom scenario (disabled for presets). */
+  onRemoveScenario: () => void
+  /** True only when the active scenario is a custom LLM-generated one. */
+  canRemove: boolean
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -68,6 +76,9 @@ export default function ChatPanel({
   plannerMessage,
   onMapCommand,
   getAppState,
+  onNewScenario,
+  onRemoveScenario,
+  canRemove,
 }: ChatPanelProps) {
   const { t } = useI18n()
   const [tab, setTab]         = useState<ChatTab>('assistant')
@@ -141,6 +152,38 @@ export default function ChatPanel({
           >
             <ChatIcon size={12} />
             {t('sidebar.chat.tab.planner')}
+          </button>
+        </div>
+
+        {/* New / Remove scenario controls */}
+        <div className="flex items-center gap-0.5 shrink-0">
+          <button
+            onClick={() => { setTab('planner'); setText(''); setError(null); onNewScenario() }}
+            aria-label={t('sidebar.chat.new')}
+            title={t('sidebar.chat.new')}
+            className="
+              w-7 h-7 rounded-md
+              text-mute hover:text-ink hover:bg-canvas-soft
+              inline-flex items-center justify-center
+              transition-colors
+            "
+          >
+            <PlusIcon size={13} />
+          </button>
+          <button
+            onClick={() => { onRemoveScenario(); setTab('planner') }}
+            disabled={!canRemove}
+            aria-label={t('sidebar.chat.remove')}
+            title={t('sidebar.chat.remove')}
+            className="
+              w-7 h-7 rounded-md
+              text-mute hover:text-error hover:bg-canvas-soft
+              inline-flex items-center justify-center
+              transition-colors
+              disabled:opacity-30 disabled:pointer-events-none
+            "
+          >
+            <TrashIcon size={13} />
           </button>
         </div>
 

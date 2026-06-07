@@ -14,10 +14,11 @@ import { useI18n } from '../context/I18nContext'
 
 interface ScenarioPanelProps {
   activeScenario: Scenario | null
+  customScenarios: Scenario[]
   onSelect: (scenario: Scenario | null) => void
 }
 
-export default function ScenarioPanel({ activeScenario, onSelect }: ScenarioPanelProps) {
+export default function ScenarioPanel({ activeScenario, customScenarios, onSelect }: ScenarioPanelProps) {
   const { t } = useI18n()
 
   return (
@@ -48,25 +49,33 @@ export default function ScenarioPanel({ activeScenario, onSelect }: ScenarioPane
           {/* Hairline separator */}
           <span className="w-px h-5 bg-hairline mx-1 shrink-0" />
 
-          {/* AI Goal — shown immediately after "State today" when the LLM generated a scenario */}
-          {activeScenario?.id === 'custom' && activeScenario.custom_label && (
+          {/* AI Goal pills — one per persisted LLM scenario, newest first */}
+          {customScenarios.length > 0 && (
             <>
               <span className="eyebrow px-2 shrink-0 text-mute">AI</span>
-              <button
-                onClick={() => onSelect(null)}
-                title="Clear AI goal"
-                className="
-                  h-8 px-4 rounded-full text-[13px] font-medium tracking-body-sm
-                  inline-flex items-center gap-2 transition-all whitespace-nowrap
-                  bg-canvas text-link shadow-card border border-link/20
-                "
-              >
-                <span className="w-1.5 h-1.5 rounded-full bg-link shrink-0" />
-                <span>{activeScenario.custom_label}</span>
-                <span className="font-mono text-[10px] tracking-[0.05em] text-mute">
-                  {activeScenario.horizon_year}
-                </span>
-              </button>
+              {customScenarios.map(s => {
+                const isActive = activeScenario?.id === s.id
+                return (
+                  <button
+                    key={s.id}
+                    onClick={() => onSelect(isActive ? null : s)}
+                    title={s.custom_label ?? s.label_key}
+                    className={`
+                      h-8 px-4 rounded-full text-[13px] font-medium tracking-body-sm
+                      inline-flex items-center gap-2 transition-all whitespace-nowrap
+                      ${isActive
+                        ? 'bg-canvas text-link shadow-card border border-link/20'
+                        : 'bg-transparent text-body hover:text-ink hover:bg-canvas'}
+                    `}
+                  >
+                    <span className="w-1.5 h-1.5 rounded-full bg-link shrink-0" />
+                    <span>{s.custom_label ?? s.label_key}</span>
+                    <span className="font-mono text-[10px] tracking-[0.05em] text-mute">
+                      {s.horizon_year}
+                    </span>
+                  </button>
+                )
+              })}
               <span className="w-px h-5 bg-hairline mx-1 shrink-0" />
             </>
           )}

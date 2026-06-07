@@ -77,6 +77,8 @@
   "sidebar.chat.collapse": "Collapse chat",
   "sidebar.chat.tab.assistant": "Assistant",
   "sidebar.chat.tab.planner": "Planner",
+  "sidebar.chat.new": "New scenario",
+  "sidebar.chat.remove": "Remove scenario",
 
   "assistant.empty": "Ask about the map.",
   "assistant.empty_sub": "I can answer questions about the 18 districts and highlight them on the map.",
