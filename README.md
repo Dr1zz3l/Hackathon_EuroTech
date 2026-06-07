@@ -12,7 +12,7 @@ An interactive map of Hong Kong's 18 administrative districts that takes a city-
 - **Scenario engine** — pick one of four AHP-weighted planning scenarios (Green HK 2050, Industrial Growth, Education Hub, Urban Renewal) or type a natural-language goal and let the AI assistant parse it into a scenario.
 - **Transparent scoring** — each district gets a weighted-sum viability score with a top-3 reason breakdown (displacement risk, demographic headroom, land slack, area). No black box.
 - **Land reallocation planner** — a genuine bounded quadratic programme (KKT + bisection) distributes a planning target across 211 sub-district neighbourhoods, then aggregates back to districts. Shows what each district donates and what it receives.
-- **Forecast** — TabPFN-assisted compound-growth projection (Low / Expected / High) with planning recommendations for housing, ageing, open space and school demand.
+- **Forecast** — compound-growth projection (Low / Expected / High) driven by **measured 2011–2021 census CAGRs** for all 18 districts and 189 neighbourhoods. Future `median_age` / `pct_over65` indicators are predicted by TabPFN trained on the full **2011/2016/2021 temporal panel** (600+ rows, `year` as a feature) — a learned time-trend, not a cross-sectional proxy. Planning recommendations cover housing supply, ageing, open space, and school demand.
 - **AI assistant** — streaming Claude chat with tools: goal parsing, score explanations, plan summaries, social-listening sentiment from Reddit, and cross-sectional demographic prediction.
 - **EN / Traditional Chinese** — full bilingual UI, 147/147 key parity.
 
@@ -101,9 +101,11 @@ viability(district, scenario) =
   + w_age          × norm(pct_over65)
   + w_headroom     × norm(residential_frac) × (1 − land[target])
   + w_area         × norm(area_km2)
+  + w_renewal      × norm(ageing_building_share)          [urban_renewal only]
+  + w_adjacency    × norm(neighbour-avg land[target])     [all scenarios]
 ```
 
-Weights are AHP-derived (`weights_ahp.py`; all consistency ratios CR < 0.07). Normalisation is min-max across all 18 districts; density uses log₁₀ first. The `(1 − land[target])` headroom factor prevents districts already saturated with the target land use from scoring artificially high.
+Weights are AHP-derived (`weights_ahp.py`; all consistency ratios CR < 0.07). Normalisation is min-max across all 18 districts; density uses log₁₀ first. The `(1 − land[target])` headroom factor prevents districts already saturated with the target land use from scoring artificially high. The adjacency term uses the 18-node border graph (`frontend/public/adjacency.json`) to reward districts near land-rich neighbours.
 
 ### Scenarios
 
@@ -124,16 +126,18 @@ All data is real and locally precomputed — no live API calls for the map itsel
 
 | Source | Used for |
 |---|---|
-| HK Planning Dept LUMHK 2024 (10 m GeoTIFF) | Land-use fractions for all 18 districts + 211 neighbourhoods |
+| HK Planning Dept LUMHK 2024 (10 m GeoTIFF) | Land-use fractions for all 18 districts + 211 STPU neighbourhoods |
 | HK 2021 Census (DC_21C) | Population, %65+, median age, density |
+| HK Census 2011 & 2016 STPU GeoJSONs | Historical population + demographics for measured CAGRs and TabPFN temporal panel |
 | HK Buildings Dept records | Ageing-building share (urban-renewal scoring term) |
 
 The GeoJSON files in `frontend/public/` are precomputed and committed — you do not need to rerun the pipeline to use the app. To regenerate:
 
 ```bash
-uv run python build_data.py          # 18 districts → districts.geojson
-uv run python build_neighbourhoods.py  # 211 STPUs → neighbourhoods.geojson
-uv run python weights_ahp.py         # AHP weight derivation
+uv run python build_data.py               # 18 districts → districts.geojson
+uv run python build_neighbourhoods.py     # 211 STPUs → neighbourhoods.geojson
+uv run python build_population_history.py # population_history.csv + census_panel.json
+uv run python weights_ahp.py              # AHP weight derivation
 ```
 
 ---
@@ -153,13 +157,23 @@ frontend/
 backend/llm/
   app.py                # FastAPI app + /api/* endpoints
   chat.py               # streaming assistant (multi-turn, tool use)
-  predict.py            # TabPFN / kNN regressor
-  forecast.py           # compound-growth projection engine
+  predict.py            # TabPFN / kNN cross-sectional regressor
+  forecast.py           # compound-growth projection + temporal TabPFN panel
+  history.py            # measured CAGR loader (population_history.csv)
+  panel.py              # temporal census panel loader (census_panel.json)
   social.py             # Reddit social-listening (24 h cache)
 
-build_data.py           # raster pipeline → districts.geojson
-build_neighbourhoods.py # raster pipeline → neighbourhoods.geojson
-weights_ahp.py          # AHP weight derivation (run offline)
+data/population/
+  census_stpu.geojson         # 2021 STPU census (211 units)
+  census_stpu_2016.geojson    # 2016 STPU census (214 units)
+  census_stpu_2011.geojson    # 2011 STPU census (209 units)
+  population_history.csv      # long-format CAGR input (generated)
+  census_panel.json           # TabPFN temporal training panel (generated)
+
+build_data.py                 # raster pipeline → districts.geojson
+build_neighbourhoods.py       # raster pipeline → neighbourhoods.geojson
+build_population_history.py   # census series → population_history.csv + census_panel.json
+weights_ahp.py                # AHP weight derivation (run offline)
 ```
 
 ---
