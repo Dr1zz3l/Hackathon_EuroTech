@@ -89,7 +89,7 @@ const DEFAULT_LAYERS: AppLayer[] = [
     label_key: 'layer.districts',
     subtitle_key: 'layer.districts.subtitle',
     visible: true,
-    opacity: 1.0,
+    opacity: 0.5,
     capabilities: { download: true, style: true },
     swatch: 'districts',
     level: 'district',
