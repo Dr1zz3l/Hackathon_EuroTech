@@ -21,11 +21,8 @@
  *   • Close button → icon-button-circular ghost
  */
 
-import { useEffect, useRef, useState } from 'react'
-import type { District, DistrictAllocation, LandUse, Scenario, ScoreResult, ScoreTerm } from '../types'
-import type { Locale } from '../context/I18nContext'
+import type { District, DistrictAllocation, LandUse, Scenario } from '../types'
 import { useI18n } from '../context/I18nContext'
-import { buildExplainPayload, explainScore } from '../lib/llm'
 
 // ---------------------------------------------------------------------------
 // Land-use palette — keep in sync with MapView + tailwind.config theme.colors.land
@@ -124,66 +121,6 @@ function DonutChart({ land }: { land: LandUse }) {
 }
 
 // ---------------------------------------------------------------------------
-// Score bar — brand link → warning → error ramp
-// ---------------------------------------------------------------------------
-
-function ScoreBar({ score }: { score: number }) {
-  const pct = Math.max(0, Math.min(100, Math.round(score * 100)))
-  return (
-    <div className="space-y-2">
-      <div className="flex items-baseline justify-between gap-3">
-        <span className="display-xl tabular-nums">{pct}</span>
-        <span className="eyebrow">out of 100</span>
-      </div>
-      <div className="relative h-2 rounded-full overflow-hidden bg-canvas-soft-2">
-        <div
-          className="absolute inset-0 rounded-full"
-          style={{
-            background: 'linear-gradient(to right, #0070f3, #f5a623, #ee0000)',
-          }}
-        />
-        {/* Mask the right portion to reveal only [0, pct] */}
-        <div
-          className="absolute inset-y-0 right-0 bg-canvas-soft-2"
-          style={{ width: `${100 - pct}%` }}
-        />
-        {/* Position indicator */}
-        <div
-          className="absolute top-1/2 -translate-y-1/2 w-3 h-3 rounded-full bg-canvas shadow-card"
-          style={{ left: `calc(${pct}% - 6px)` }}
-        />
-      </div>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
-// Reason row
-// ---------------------------------------------------------------------------
-
-function ReasonRow({ term, t }: { term: ScoreTerm; t: (k: string) => string }) {
-  const pct = Math.round(term.contribution * 100)
-  return (
-    <div className="flex items-start gap-3 py-2 hairline last:border-b-0">
-      <span className="mt-1.5 shrink-0 w-1.5 h-1.5 rounded-full bg-ink" />
-      <span className="text-[13px] text-body flex-1 leading-snug">
-        {t(`reason.${term.key}`).replace('{value}', term.display_value)}
-      </span>
-      <span
-        className="
-          shrink-0 inline-flex items-center justify-center
-          font-mono tabular-nums text-[10px] tracking-[0.05em]
-          h-5 px-1.5 rounded-md
-          bg-canvas-soft-2 text-ink
-        "
-      >
-        +{pct}
-      </span>
-    </div>
-  )
-}
-
-// ---------------------------------------------------------------------------
 // Stat row
 // ---------------------------------------------------------------------------
 
@@ -247,7 +184,6 @@ function TradeList({ allocation, t }: { allocation: DistrictAllocation; t: (k: s
 interface DetailPanelProps {
   district: District
   scenario: Scenario | null
-  scoreResult: ScoreResult | null
   /** Per-district reallocation result — null for Urban Renewal or when not computed yet. */
   allocation: DistrictAllocation | null
   onClose: () => void
@@ -256,49 +192,11 @@ interface DetailPanelProps {
 export default function DetailPanel({
   district,
   scenario,
-  scoreResult,
   allocation,
   onClose,
 }: DetailPanelProps) {
   const { t, locale } = useI18n()
   const displayName = locale === 'yue' ? district.name_tc : district.name
-
-  // ── AI explanation (Stage 2) ──────────────────────────────────────────────
-  const [aiProse, setAiProse]     = useState<string | null>(null)
-  const [aiLoading, setAiLoading] = useState(false)
-  const fetchKey = useRef<string>('')
-
-  useEffect(() => {
-    if (!scenario || !scoreResult) {
-      setAiProse(null)
-      return
-    }
-
-    const key = `${district.name}|${scenario.id}|${scenario.target}|${scoreResult.score.toFixed(3)}|${locale}`
-    if (key === fetchKey.current) return
-    fetchKey.current = key
-
-    setAiProse(null)
-    setAiLoading(true)
-
-    const payload = buildExplainPayload(
-      { ...district, land: district.land as unknown as Record<string, number> },
-      scenario,
-      scoreResult,
-      locale as Locale,
-    )
-
-    explainScore(payload)
-      .then(prose => {
-        if (fetchKey.current === key) setAiProse(prose)
-      })
-      .catch(() => {
-        if (fetchKey.current === key) setAiProse(null)
-      })
-      .finally(() => {
-        if (fetchKey.current === key) setAiLoading(false)
-      })
-  }, [district.name, scenario?.id, scenario?.target, scoreResult?.score, locale]) // eslint-disable-line react-hooks/exhaustive-deps
 
   return (
     <div className="flex flex-col h-full bg-canvas text-ink overflow-y-auto">
@@ -344,41 +242,6 @@ export default function DetailPanel({
 
       {/* ── Body sections ───────────────────────────────────────── */}
       <div className="flex-1 overflow-y-auto px-6 pt-6 pb-8 space-y-7">
-
-        {/* Viability score — only when a scenario is active */}
-        {scenario && scoreResult && (
-          <section>
-            <p className="eyebrow mb-3">{t('panel.score')}</p>
-            <ScoreBar score={scoreResult.score} />
-            <p className="text-[11px] text-mute mt-2.5 leading-snug">
-              {t('panel.score.disclaimer')}
-            </p>
-
-            {/* AI summary (Stage 2) — gracefully absent when backend is down */}
-            {(aiLoading || aiProse) && (
-              <div className="mt-3 p-3 rounded-lg bg-canvas-soft border border-hairline">
-                <p className="eyebrow mb-1.5">{t('panel.ai_summary.title')}</p>
-                {aiLoading ? (
-                  <p className="text-[11px] text-mute animate-pulse">
-                    {t('panel.ai_summary.loading')}
-                  </p>
-                ) : (
-                  <p className="text-[12px] text-body leading-relaxed">{aiProse}</p>
-                )}
-              </div>
-            )}
-
-            {/* Top reasons — always shown for transparency */}
-            <div className="mt-5">
-              <p className="eyebrow mb-1.5">{t('panel.reasons.title')}</p>
-              <div className="border-t border-hairline">
-                {scoreResult.top_reasons.map(term => (
-                  <ReasonRow key={term.key} term={term} t={t} />
-                ))}
-              </div>
-            </div>
-          </section>
-        )}
 
         {/* Land-use donut — future when allocation available, else current */}
         <section>

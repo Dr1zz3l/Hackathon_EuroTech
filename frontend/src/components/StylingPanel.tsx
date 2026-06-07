@@ -16,15 +16,11 @@
 import { useI18n } from '../context/I18nContext'
 import type { AppLayer } from './LayersPanel'
 
-export type PaletteMode = 'land' | 'scenario'
-
 interface StylingPanelProps {
   layers: AppLayer[]
   activeLayerId: string
   onSetActiveLayer: (id: string) => void
   onSetOpacity: (id: string, opacity: number) => void
-  paletteMode: PaletteMode
-  onSetPaletteMode: (mode: PaletteMode) => void
   onReset: () => void
 }
 
@@ -33,8 +29,6 @@ export default function StylingPanel({
   activeLayerId,
   onSetActiveLayer,
   onSetOpacity,
-  paletteMode,
-  onSetPaletteMode,
   onReset,
 }: StylingPanelProps) {
   const { t } = useI18n()
@@ -119,67 +113,6 @@ export default function StylingPanel({
           aria-label={t('styling.opacity')}
         />
       </section>
-
-      {/* ── Palette mode — only meaningful for districts ──────── */}
-      {active.id === 'districts' && (
-        <>
-          <div className="hairline" />
-          <section>
-            <p className="eyebrow mb-2.5">{t('styling.palette')}</p>
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => onSetPaletteMode('land')}
-                className={`
-                  flex flex-col items-start gap-2 p-3 rounded-md
-                  border transition-colors text-left
-                  ${
-                    paletteMode === 'land'
-                      ? 'border-ink bg-canvas-soft'
-                      : 'border-hairline bg-canvas hover:border-hairline-strong'
-                  }
-                `}
-              >
-                <div className="flex gap-0.5 w-full">
-                  {['#ff0080', '#7928ca', '#f5a623', '#50e3c2', '#0070f3', '#a1a1a1'].map(c => (
-                    <span key={c} className="flex-1 h-1.5 rounded-sm" style={{ background: c }} />
-                  ))}
-                </div>
-                <span className="text-[12px] font-medium tracking-body-sm text-ink">
-                  {t('styling.palette.land')}
-                </span>
-              </button>
-
-              <button
-                onClick={() => onSetPaletteMode('scenario')}
-                className={`
-                  flex flex-col items-start gap-2 p-3 rounded-md
-                  border transition-colors text-left
-                  ${
-                    paletteMode === 'scenario'
-                      ? 'border-ink bg-canvas-soft'
-                      : 'border-hairline bg-canvas hover:border-hairline-strong'
-                  }
-                `}
-              >
-                <div
-                  className="w-full h-1.5 rounded-sm"
-                  style={{
-                    background: 'linear-gradient(to right, #0070f3, #f5a623, #ee0000)',
-                  }}
-                />
-                <span className="text-[12px] font-medium tracking-body-sm text-ink">
-                  {t('styling.palette.scenario')}
-                </span>
-              </button>
-            </div>
-            <p className="text-[11px] text-mute mt-2.5 leading-snug">
-              {paletteMode === 'land'
-                ? t('styling.palette.land.help')
-                : t('styling.palette.scenario.help')}
-            </p>
-          </section>
-        </>
-      )}
 
       <div className="flex-1" />
 

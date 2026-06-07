@@ -24,7 +24,7 @@
  *   District/…      from types.ts            (shared contract — do not edit)
  *
  * State: activeScenario, selectedDistrict, geojson, scorer, allocator,
- *        adjacency, mapMode, plannerMessage (LLM summary after a custom goal),
+ *        adjacency, plannerMessage (LLM summary after a custom goal),
  *        layer/panel/sidebar state.
  */
 
@@ -37,7 +37,7 @@ import { createAllocator, aggregateToDistricts } from './lib/reallocation'
 import { SCENARIOS } from './scenarios'
 import type {
   AdjacencyMap, AllocationResult, Allocator,
-  District, Scenario, ScoreResult, Scorer,
+  District, Scenario, Scorer,
 } from './types'
 import {
   buildSyntheticScenario, buildPlanSummaryPayload,
@@ -55,7 +55,7 @@ import DetailEmptyState from './components/DetailEmptyState'
 import MapLegend from './components/MapLegend'
 import LanguageToggle from './components/LanguageToggle'
 import LayersPanel, { type AppLayer } from './components/LayersPanel'
-import StylingPanel, { type PaletteMode } from './components/StylingPanel'
+import StylingPanel from './components/StylingPanel'
 import ForecastPanel from './components/ForecastPanel'
 import { ChevronLeftIcon, ChevronRightIcon, SlidersIcon, LayersIcon } from './components/Icons'
 import type { MapApi } from './components/MapView'
@@ -181,7 +181,6 @@ function AppInner() {
   // ── Scenario / selection state ───────────────────────────────────────────────
   const [activeScenario,   setActiveScenario]   = useState<Scenario | null>(null)
   const [selectedDistrict, setSelectedDistrict] = useState<District | null>(null)
-  const [mapMode, setMapMode] = useState<'future' | 'viability'>('future')
   const [plannerMessage, setPlannerMessage] = useState<PlannerMessage | null>(null)
 
   // ── Sidebar / panel state ────────────────────────────────────────────────────
@@ -195,7 +194,6 @@ function AppInner() {
   // ── Layer state ──────────────────────────────────────────────────────────────
   const [layers,        setLayers]        = useState<AppLayer[]>(DEFAULT_LAYERS)
   const [styleLayerId,  setStyleLayerId]  = useState<string>('districts')
-  const [paletteMode,   setPaletteMode]   = useState<PaletteMode>('land')
   // Agent-created analytical overlays (heatmap / choropleth / bubble).
   const [dynamicLayers, setDynamicLayers] = useState<DynamicLayer[]>([])
   const dynIdRef = useRef(0)
@@ -252,22 +250,6 @@ function AppInner() {
       })
   }, [])
 
-  // ── Switch palette automatically when a scenario activates ──────────────────
-  useEffect(() => {
-    setPaletteMode(activeScenario ? 'scenario' : 'land')
-    setMapMode('future')
-  }, [activeScenario])
-
-  // ── Score for selected district/neighbourhood under active scenario ───────────
-  const scoreResult = useMemo<ScoreResult | null>(() => {
-    if (!selectedDistrict || !activeScenario) return null
-    // Use the neighbourhood scorer when a neighbourhood is selected (finer norms)
-    if (selectedDistrict.tpu_code && nbhdScorer) {
-      return nbhdScorer.score(selectedDistrict, activeScenario)
-    }
-    if (!scorer) return null
-    return scorer.score(selectedDistrict, activeScenario)
-  }, [selectedDistrict, activeScenario, scorer, nbhdScorer])
 
   // ── Neighbourhood-level flat QP (211 units, source of truth) ─────────────────
   const nbhdAllocationResult = useMemo<AllocationResult | null>(() => {
@@ -296,7 +278,6 @@ function AppInner() {
     // 2. Build synthetic scenario and activate it immediately (map recolours)
     const scenario = buildSyntheticScenario(parsed)
     setActiveScenario(scenario)
-    setMapMode('future')
 
     // Determine which weight keys the LLM explicitly overrode
     const overriddenKeys = new Set(
@@ -483,8 +464,7 @@ function AppInner() {
       const def = DEFAULT_LAYERS.find(d => d.id === l.id)
       return def ? { ...l, opacity: def.opacity, visible: def.visible } : l
     }))
-    setPaletteMode(activeScenario ? 'scenario' : 'land')
-  }, [activeScenario])
+  }, [])
 
   // ── District selection — auto-open Detail tab ────────────────────────────────
   const handleSelectDistrict = useCallback((d: District) => {
@@ -622,10 +602,8 @@ function AppInner() {
         <div className="relative flex-1 bg-canvas-soft-2">
           <MapView
             geojson={geojson}
-            scorer={scorer}
             activeScenario={activeScenario}
             allocationResult={allocationResult}
-            mapMode={mapMode}
             selectedDistrict={selectedDistrict}
             onSelectDistrict={handleSelectDistrict}
             adjacency={adjacency}
@@ -633,19 +611,15 @@ function AppInner() {
             districtsOpacity={districtsLayer.opacity}
             basemapVisible={basemapLayer.visible}
             basemapOpacity={basemapLayer.opacity}
-            paletteMode={paletteMode}
             apiRef={mapApi}
             onActiveLevelChange={setActiveLevel}
             nbhdVisible={neighbourhoodLayer.visible}
             nbhdGeojson={nbhdGeojson}
-            nbhdScorer={nbhdScorer}
             nbhdAllocationResult={nbhdAllocationResult}
             dynamicLayers={orderedDynamicLayers}
           />
           <MapLegend
             activeScenario={activeScenario}
-            mapMode={mapMode}
-            onToggleMapMode={() => setMapMode(m => m === 'future' ? 'viability' : 'future')}
           />
 
           {/* Active scenario description badge */}
@@ -752,7 +726,6 @@ function AppInner() {
                   <DetailPanel
                     district={selectedDistrict}
                     scenario={activeScenario}
-                    scoreResult={scoreResult}
                     allocation={
                       selectedDistrict.tpu_code
                         // Neighbourhood selected → look up in the flat neighbourhood QP result
@@ -773,8 +746,6 @@ function AppInner() {
                   activeLayerId={styleLayerId}
                   onSetActiveLayer={setStyleLayerId}
                   onSetOpacity={setLayerOpacity}
-                  paletteMode={paletteMode}
-                  onSetPaletteMode={setPaletteMode}
                   onReset={resetStyling}
                 />
               )}

@@ -6,7 +6,6 @@
  * Visual system: Vercel light canvas (see public/DESIGN-vercel.md).
  *   - Carto Positron tiles (clean, near-white) sit on the canvas-soft body
  *   - Land-use palette re-keyed to brand gradient stops
- *   - Viability ramp: link-blue → warning amber → error red
  *   - Selected district stroked in link-blue; adjacency neighbours in dashed amber
  *
  * Zoom reveal:
@@ -16,18 +15,16 @@
  *
  * Layer-state contract (atlas.co-style):
  *   - `districtsVisible/Opacity` and `basemapVisible/Opacity` drive live layer state
- *   - `paletteMode` switches between land-use colouring and the viability-score ramp
- *   - `mapMode` switches between future-projected land use and viability within a scenario
- *   - `allocationResult` + `mapMode='future'` triggers future land colouring + delta labels
+ *   - `allocationResult` triggers future land colouring + delta labels on hover
  *   - `adjacency` highlights border-neighbours of the selected district
  *   - `apiRef` is filled with a handle the parent can call to imperative-zoom
- *   - `nbhdGeojson` / `nbhdScorer` / `nbhdAllocationResult` power the neighbourhood layer
+ *   - `nbhdGeojson` / `nbhdAllocationResult` power the neighbourhood layer
  */
 
 import { useCallback, useEffect, useRef } from 'react'
 import L from 'leaflet'
 import 'leaflet.heat'   // augments L with L.heatLayer (true smooth heatmap)
-import type { AllocationResult, AdjacencyMap, District, LandUse, Scenario, ScoreResult, Scorer } from '../types'
+import type { AllocationResult, AdjacencyMap, District, LandUse, Scenario } from '../types'
 import { useI18n } from '../context/I18nContext'
 import {
   type DynamicLayer,
@@ -98,29 +95,6 @@ function dominantLandColourFromUse(land: LandUse): string {
   return LAND_COLOURS[key] ?? '#94a3b8'
 }
 
-/**
- * Viability score → colour ramp, brand-aligned.
- *   0   → link blue       (#0070f3)
- *   0.5 → warning amber   (#f5a623)
- *   1   → error red       (#ee0000)
- */
-function scoreColour(score: number): string {
-  const s = Math.max(0, Math.min(1, score))
-  let r: number, g: number, b: number
-  if (s < 0.5) {
-    const t = s / 0.5
-    r = Math.round(  0 + (245 -   0) * t)
-    g = Math.round(112 + (166 - 112) * t)
-    b = Math.round(243 + ( 35 - 243) * t)
-  } else {
-    const t = (s - 0.5) / 0.5
-    r = Math.round(245 + (238 - 245) * t)
-    g = Math.round(166 + (  0 - 166) * t)
-    b = Math.round( 35 + (  0 -  35) * t)
-  }
-  return `rgb(${r},${g},${b})`
-}
-
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 interface DistrictFeature {
@@ -144,15 +118,10 @@ export interface MapApi {
   clearHighlights: () => void
 }
 
-export type PaletteMode = 'land' | 'scenario'
-
 interface MapViewProps {
   geojson: DistrictCollection
-  scorer: Scorer
   activeScenario: Scenario | null
   allocationResult: AllocationResult | null
-  /** 'future' = projected dominant land use (default); 'viability' = score ramp. */
-  mapMode: 'future' | 'viability'
   selectedDistrict: District | null
   onSelectDistrict: (d: District) => void
   /** Adjacency graph — used to highlight border-neighbours of the selected district. */
@@ -162,7 +131,6 @@ interface MapViewProps {
   districtsOpacity: number   // 0–1
   basemapVisible: boolean
   basemapOpacity: number     // 0–1
-  paletteMode: PaletteMode
   /** Parent fills this with the imperative handle on mount */
   apiRef?: { current: MapApi | null }
   /** Fires when the zoom-driven active level changes (district ↔ neighbourhood). */
@@ -172,8 +140,6 @@ interface MapViewProps {
   nbhdVisible?: boolean
   /** 211 STPU neighbourhood GeoJSON (loaded asynchronously). */
   nbhdGeojson?: DistrictCollection | null
-  /** Scorer with norms computed over the 211 neighbourhood units. */
-  nbhdScorer?: Scorer | null
   /** Flat QP allocation result over all 211 neighbourhoods. */
   nbhdAllocationResult?: AllocationResult | null
   /** Agent-created analytical overlays (heatmap / choropleth / bubble). */
@@ -356,10 +322,8 @@ function buildDynamicLeafletLayer(
 
 export default function MapView({
   geojson,
-  scorer,
   activeScenario,
   allocationResult,
-  mapMode,
   selectedDistrict,
   onSelectDistrict,
   adjacency,
@@ -367,12 +331,10 @@ export default function MapView({
   districtsOpacity,
   basemapVisible,
   basemapOpacity,
-  paletteMode,
   apiRef,
   onActiveLevelChange,
   nbhdVisible = true,
   nbhdGeojson,
-  nbhdScorer,
   nbhdAllocationResult,
   dynamicLayers,
 }: MapViewProps) {
@@ -437,23 +399,6 @@ export default function MapView({
     names: new Set(),
     color: HIGHLIGHT_COLOR,
   })
-
-  // Precompute all scores at render time (ref keeps them off the re-render path)
-  const scoreMap     = useRef<Map<string, ScoreResult>>(new Map())
-  const nbhdScoreMap = useRef<Map<string, ScoreResult>>(new Map())
-
-  if (activeScenario) {
-    geojson.features.forEach(f => {
-      const d = f.properties
-      scoreMap.current.set(d.name, scorer.score(d, activeScenario))
-    })
-    if (nbhdGeojson && nbhdScorer) {
-      nbhdGeojson.features.forEach(f => {
-        const d = f.properties as District
-        nbhdScoreMap.current.set(d.name, nbhdScorer.score(d, activeScenario))
-      })
-    }
-  }
 
   // ── Build map once ──────────────────────────────────────────────────────────
   useEffect(() => {
@@ -556,8 +501,6 @@ export default function MapView({
 
     const deltaMarkers: L.Marker[] = []
 
-    const useScoreRamp = paletteMode === 'scenario' && activeScenario != null && mapMode === 'viability'
-
     const layer = L.geoJSON(geojson as unknown as GeoJSON.GeoJsonObject, {
       pane: 'districtsPane',
       style: (feature) => {
@@ -571,12 +514,7 @@ export default function MapView({
           && !selectedDistrict.tpu_code  // only highlight adjacency at district level
           && (adjacency[selectedDistrict.name] ?? []).includes(d.name)
 
-        let fillColor: string
-        if (useScoreRamp) {
-          fillColor = scoreColour(scoreMap.current.get(d.name)?.score ?? 0)
-        } else {
-          fillColor = dominantLandColour(d)
-        }
+        const fillColor = dominantLandColour(d)
 
         // Assistant highlight takes top visual precedence.
         const hl = highlightRef.current
@@ -629,7 +567,7 @@ export default function MapView({
 
         // Pre-build delta marker for this district; shown/hidden on hover only.
         let deltaMarker: L.Marker | null = null
-        if (!useScoreRamp && activeScenario && mapMode === 'future' && allocationResult) {
+        if (activeScenario && allocationResult) {
           const alloc = allocationResult.byDistrict.get(d.name)
           deltaMarker = buildDeltaMarker(d, alloc, lyr)
           if (deltaMarker) deltaMarkers.push(deltaMarker)
@@ -640,7 +578,7 @@ export default function MapView({
           mouseover: (e) => {
             const l = e.target as L.Path
             const hoverStyle: L.PathOptions = { fillOpacity: 0.85 * districtsOpacity, weight: 2 }
-            if (!useScoreRamp && mapMode === 'future' && allocationResult) {
+            if (allocationResult) {
               const alloc = allocationResult.byDistrict.get(d.name)
               if (alloc) hoverStyle.fillColor = dominantLandColourFromUse(alloc.future)
             }
@@ -656,9 +594,7 @@ export default function MapView({
             const baseStyle: L.PathOptions = {
               fillOpacity: (sel ? 0.88 : 0.7) * districtsOpacity,
               weight: sel ? 2.5 : 1.25,
-            }
-            if (!useScoreRamp && mapMode === 'future') {
-              baseStyle.fillColor = dominantLandColour(d)
+              fillColor: dominantLandColour(d),
             }
             // Keep the selected outline on top after the hover ends.
             l.setStyle(baseStyle)
@@ -702,8 +638,8 @@ export default function MapView({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeScenario, allocationResult, mapMode, selectedDistrict,
-    locale, geojson, scorer, adjacency, paletteMode, districtsOpacity,
+    activeScenario, allocationResult, selectedDistrict,
+    locale, geojson, adjacency, districtsOpacity,
   ])
 
   // ── Build neighbourhood GeoJSON layer ───────────────────────────────────────
@@ -717,7 +653,6 @@ export default function MapView({
     }
 
     const nbhdDeltaMarkers: L.Marker[] = []
-    const useScoreRamp = paletteMode === 'scenario' && activeScenario != null && mapMode === 'viability'
 
     const layer = L.geoJSON(nbhdGeojson as unknown as GeoJSON.GeoJsonObject, {
       pane: 'nbhdPane',
@@ -725,12 +660,7 @@ export default function MapView({
         const d = feature?.properties as District
         const isSelected = d.name === selectedDistrict?.name
 
-        let fillColor: string
-        if (useScoreRamp) {
-          fillColor = scoreColour(nbhdScoreMap.current.get(d.name)?.score ?? 0)
-        } else {
-          fillColor = dominantLandColour(d)
-        }
+        const fillColor = dominantLandColour(d)
 
         // Assistant highlight takes top visual precedence.
         const hl = highlightRef.current
@@ -774,7 +704,7 @@ export default function MapView({
 
         // Pre-build delta marker for this neighbourhood; shown/hidden on hover only.
         let deltaMarker: L.Marker | null = null
-        if (!useScoreRamp && activeScenario && mapMode === 'future' && nbhdAllocationResult) {
+        if (activeScenario && nbhdAllocationResult) {
           const alloc = nbhdAllocationResult.byDistrict.get(d.name)
           deltaMarker = buildDeltaMarker(d, alloc, lyr)
           if (deltaMarker) nbhdDeltaMarkers.push(deltaMarker)
@@ -785,7 +715,7 @@ export default function MapView({
           mouseover: (e) => {
             const l = e.target as L.Path
             const hoverStyle: L.PathOptions = { fillOpacity: 0.88 * districtsOpacity, weight: 1.5 }
-            if (!useScoreRamp && mapMode === 'future' && nbhdAllocationResult) {
+            if (nbhdAllocationResult) {
               const alloc = nbhdAllocationResult.byDistrict.get(d.name)
               if (alloc) hoverStyle.fillColor = dominantLandColourFromUse(alloc.future)
             }
@@ -800,9 +730,7 @@ export default function MapView({
             const baseStyle: L.PathOptions = {
               fillOpacity: (sel ? 0.90 : 0.72) * districtsOpacity,
               weight: sel ? 2.5 : 0.75,
-            }
-            if (!useScoreRamp && mapMode === 'future') {
-              baseStyle.fillColor = dominantLandColour(d)
+              fillColor: dominantLandColour(d),
             }
             // Keep the selected outline on top after the hover ends.
             l.setStyle(baseStyle)
@@ -839,8 +767,8 @@ export default function MapView({
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
-    activeScenario, nbhdAllocationResult, mapMode, selectedDistrict,
-    locale, nbhdGeojson, nbhdScorer, paletteMode, districtsOpacity,
+    activeScenario, nbhdAllocationResult, selectedDistrict,
+    locale, nbhdGeojson, districtsOpacity,
   ])
 
   // ── React to districts visibility ───────────────────────────────────────────
