@@ -16,10 +16,11 @@ from __future__ import annotations
 
 import csv
 import logging
+import math
 import statistics
 from pathlib import Path
 
-from .data import _norm
+from .data import DISTRICT_NAMES, _norm
 
 logger = logging.getLogger(__name__)
 
@@ -33,7 +34,10 @@ _CANDIDATE_PATHS = [
 _SERIES: dict[str, list[tuple[int, float]]] = {}
 # name_norm -> CAGR (fraction/yr)
 _CAGR: dict[str, float] = {}
-_BAND: float = 0.008  # default ± band if dispersion can't be computed
+# name_norm -> uncertainty band for Low/High scenarios (fraction/yr).
+# Stored per-area so district and STPU series carry their own peer dispersion.
+_BAND: dict[str, float] = {}
+_DEFAULT_BAND: float = 0.008  # fallback when <3 peers in a group
 _loaded = False
 
 
@@ -61,16 +65,37 @@ def _load() -> None:
 
     for key, pts in _SERIES.items():
         pts.sort()
-        if len(pts) >= 2:
+        if len(pts) >= 3:
+            # Log-linear fit over all available years so the 2016 (middle) point
+            # contributes rather than being discarded by an endpoint-only formula.
+            years_seq = [float(p[0]) for p in pts]
+            log_pops = [math.log(p[1]) for p in pts if p[1] > 0]
+            if len(log_pops) == len(pts):
+                lr = statistics.linear_regression(years_seq, log_pops)
+                _CAGR[key] = math.exp(lr.slope) - 1.0
+        elif len(pts) == 2:
             (y0, p0), (y1, p1) = pts[0], pts[-1]
             if y1 > y0 and p0 > 0 and p1 > 0:
                 _CAGR[key] = (p1 / p0) ** (1.0 / (y1 - y0)) - 1.0
 
-    # Uncertainty band = cross-area dispersion of growth rates (≥3 areas), so
-    # the Low/High scenarios reflect how varied real district trends actually are.
-    rates = list(_CAGR.values())
-    if len(rates) >= 3:
-        _BAND = max(0.005, float(statistics.pstdev(rates)))
+    # Per-granularity uncertainty band: district series and STPU series have very
+    # different variance profiles, so we compute the cross-peer dispersion separately
+    # for each group and assign each area its group band.
+    district_norms = {_norm(n) for n in DISTRICT_NAMES}
+    district_rates = [r for k, r in _CAGR.items() if k in district_norms]
+    stpu_rates     = [r for k, r in _CAGR.items() if k not in district_norms]
+
+    district_band = (
+        max(0.005, float(statistics.pstdev(district_rates)))
+        if len(district_rates) >= 3 else _DEFAULT_BAND
+    )
+    stpu_band = (
+        max(0.005, float(statistics.pstdev(stpu_rates)))
+        if len(stpu_rates) >= 3 else _DEFAULT_BAND
+    )
+
+    for key in _CAGR:
+        _BAND[key] = district_band if key in district_norms else stpu_band
 
     logger.info("Loaded population history: %d areas with a growth trend.", len(_CAGR))
 
@@ -96,5 +121,5 @@ def history_growth(name: str) -> dict | None:
         "year_first": pts[0][0],
         "year_last": pts[-1][0],
         "n_points": len(pts),
-        "band": _BAND,
+        "band": _BAND.get(key, _DEFAULT_BAND),
     }

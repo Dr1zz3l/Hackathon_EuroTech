@@ -3,22 +3,14 @@ Forecast engine — TabPFN-assisted scenario projection for a single area.
 
 Powers the right-panel "Forecast" tab and the agent's `show_forecast` tool.
 
-Because the dataset is a single 2021 census snapshot (no time series), a literal
-multi-year forecast must be assumption-driven. We make that explicit and let
-TabPFN do the genuine modelling work:
+Headline trajectory uses the measured 2011–2021 census CAGR (history.py) when a
+series exists; otherwise a TabPFN structural "youth signal" modulates a baseline.
 
-  • Headline trajectory  — compound-growth projection of the chosen target under
-    Low / Expected / High scenarios. The Expected annual rate is modulated per
-    unit by a TabPFN "youthfulness" signal (areas the model reads as structurally
-    younger grow faster).
-  • Future indicators    — TabPFN what-if: scale the area's population & density
-    to the horizon and predict its future median age / elderly share.
-  • Recommendations      — rules over the projected numbers (housing supply,
-    ageing, decline, open space, school demand) with info/warning/critical levels.
-
-Everything is labelled as a cross-sectional model estimate, never a measured
-trend. TabPFN regressors are fitted once on all rows and cached per (granularity,
-target); what-if prediction perturbs the target area's inputs.
+Future demographic indicators (median_age, pct_over65) are predicted by TabPFN.
+When census_panel.json is available (built by build_population_history.py), TabPFN
+trains on the full 2011–2021 temporal panel with `year` as a feature, so it
+extrapolates a learned time-trend rather than a 2021-only cross-section.
+Gracefully falls back to the 2021 cross-section if the panel is absent.
 """
 
 from __future__ import annotations
@@ -30,6 +22,7 @@ import numpy as np
 
 from .data import ALL_METRICS, _metric_value, _rows_for, find_district
 from .history import history_growth
+from .panel import panel_available, panel_rows_for
 from .predict import _matrix, _new_regressor, _select_features
 
 logger = logging.getLogger(__name__)
@@ -51,8 +44,10 @@ VALUE_KIND = {
     "land.protected":     "fraction",
 }
 
-# Fitted-regressor cache: (granularity, target) -> (regressor, feats, names, model_name)
+# Cross-sectional cache: (granularity, target) -> (reg, feats, names, model_name)
 _CACHE: dict[tuple[str, str], tuple[Any, list[str], list[str], str]] = {}
+# Panel cache: (granularity, target) -> (reg, feats, uses_year, model_name)
+_PANEL_CACHE: dict[tuple[str, str], tuple[Any, list[str], bool, str]] = {}
 
 
 def _fit_for(granularity: str, target: str):
@@ -69,6 +64,42 @@ def _fit_for(granularity: str, target: str):
     names = [r.get("name", "?") for r in rows]
     _CACHE[key] = (reg, feats, names, model_name)
     return _CACHE[key]
+
+
+def _fit_panel(granularity: str, target: str) -> tuple[Any, list[str], bool, str]:
+    """
+    Fit a regressor on the 2011–2021 census panel with `year` as the last feature.
+
+    Returns (reg, feats, uses_year, model_name):
+      uses_year=True  — panel was used; caller must append year to the feature vector.
+      uses_year=False — panel unavailable / too small; fell back to cross-sectional
+                        _fit_for; caller uses feats as-is with no year column.
+    """
+    key = (granularity, target)
+    if key in _PANEL_CACHE:
+        return _PANEL_CACHE[key]
+
+    rows = [r for r in panel_rows_for(granularity) if _metric_value(r, target) is not None]
+    feats = _select_features(rows, target, None) if len(rows) >= 6 else []
+
+    if len(rows) < 6 or len(feats) < 2:
+        # Not enough panel rows → cross-sectional fallback.
+        reg_cs, feats_cs, _, model_name = _fit_for(granularity, target)
+        result: tuple[Any, list[str], bool, str] = (reg_cs, feats_cs, False, model_name)
+        _PANEL_CACHE[key] = result
+        return result
+
+    X_metrics = _matrix(rows, feats)
+    years_vec = np.asarray([float(r.get("year", 2021)) for r in rows])
+    X = np.column_stack([X_metrics, years_vec])
+    y = np.asarray([_metric_value(r, target) for r in rows], dtype=float)
+
+    reg, model_name = _new_regressor()
+    reg.fit(X, y)
+    result = (reg, feats, True, f"{model_name} · 2011–2021 panel")
+    _PANEL_CACHE[key] = result
+    logger.info("Panel fit: %s / %s — %d rows, %d feats+year.", granularity, target, len(rows), len(feats))
+    return result
 
 
 def _youth_signal(granularity: str, unit_name: str) -> float:
@@ -93,9 +124,33 @@ def _youth_signal(granularity: str, unit_name: str) -> float:
         return 0.0
 
 
-def _whatif_target(granularity: str, target: str, row: dict, growth_factor: float) -> float | None:
-    """Predict `target` for the unit after scaling pop & density by growth_factor."""
+def _whatif_target(
+    granularity: str,
+    target: str,
+    row: dict,
+    growth_factor: float,
+    year: int | None = None,
+) -> float | None:
+    """
+    Predict `target` for the unit after scaling pop & density by growth_factor.
+
+    When `year` is provided and census_panel.json is available, uses the temporal
+    panel model (TabPFN trained on 2011–2021) with year as the last feature — so the
+    prediction learns real demographic time-drift rather than a cross-sectional proxy.
+    Falls back to the 2021 cross-sectional model when the panel is absent.
+    """
     try:
+        if year is not None and panel_available():
+            reg, feats, uses_year, _ = _fit_panel(granularity, target)
+            vec = np.asarray([[_metric_value(row, m) for m in feats]], dtype=float)
+            for col in ("pop", "density"):
+                if col in feats:
+                    vec[0, feats.index(col)] *= growth_factor
+            if uses_year:
+                vec = np.column_stack([vec, [[float(year)]]])
+            return float(reg.predict(vec)[0])
+
+        # Cross-sectional fallback (panel absent or year not provided).
         reg, feats, _, _ = _fit_for(granularity, target)
         vec = np.asarray([[_metric_value(row, m) for m in feats]], dtype=float)
         for col in ("pop", "density"):
@@ -276,14 +331,15 @@ def run_forecast(
             return (pop0 * f) / area
         if target == "area_km2":
             return baseline
-        # demographic / land target: TabPFN what-if at this growth factor,
-        # interpolated from the actual baseline at year 0.
+        # demographic / land target: TabPFN what-if at this growth factor.
+        # When the panel model is active, pass the projected calendar year so
+        # TabPFN can extrapolate the learned temporal trend directly.
         if year_offset == 0:
             return baseline
-        endp = _whatif_target(granularity, target, row, f)
-        if endp is None:
+        pred = _whatif_target(granularity, target, row, f, year=BASE_YEAR + year_offset)
+        if pred is None:
             return baseline
-        return baseline + (endp - baseline) * (year_offset / H)
+        return pred
 
     trajectory = []
     for yo in range(0, H + 1):
@@ -302,8 +358,8 @@ def run_forecast(
     # ── Future indicators (mid scenario, TabPFN what-if) ────────────────────
     gf_mid = (1.0 + rates["mid"]) ** H
     future = {
-        "median_age": _whatif_target(granularity, "median_age", row, gf_mid),
-        "pct_over65": _whatif_target(granularity, "pct_over65", row, gf_mid),
+        "median_age": _whatif_target(granularity, "median_age", row, gf_mid, year=horizon_year),
+        "pct_over65": _whatif_target(granularity, "pct_over65", row, gf_mid, year=horizon_year),
         "density": round((float(row.get("density") or 0)) * gf_mid, 1),
     }
     future = {k: (round(v, 1) if v is not None else None) for k, v in future.items()}
@@ -334,29 +390,35 @@ def run_forecast(
         {"pop_mid": pop_h_mid}, future, density_high,
     )
 
-    _, _, _, model_name = _fit_for(granularity, target)
+    # Resolve model name and description from whichever fit path will be used.
+    if panel_available():
+        _, _, _, model_name = _fit_panel(granularity, target)
+        tabpfn_desc = "TabPFN trained on the 2011–2021 census panel (temporal)"
+    else:
+        _, _, _, model_name = _fit_for(granularity, target)
+        tabpfn_desc = "TabPFN 2021 cross-section"
 
     if basis == "historical":
         assumptions = [
             f"Growth uses the MEASURED census trend {hist['year_first']}→{hist['year_last']} "
             f"({mid_rate * 100:+.1f}%/yr) for this district; Low/High are ±{band * 100:.1f}% "
             f"(spread of real district trends).",
-            f"Projected from the {BASE_YEAR} baseline; future indicators are TabPFN estimates.",
+            f"Projected from the {BASE_YEAR} baseline; future indicators are {tabpfn_desc} estimates.",
             f"Housing need assumes {HOUSEHOLD_SIZE} people per household.",
         ]
         note = (
             f"Population growth is the observed {hist['year_first']}–{hist['year_last']} census "
-            f"trend; demographic indicators are a TabPFN model estimate."
+            f"trend; demographic indicators are a {tabpfn_desc} estimate."
         )
     else:
         assumptions = [
             f"No historical series for this area — growth is a TabPFN structural estimate "
             f"({mid_rate * 100:+.1f}%/yr), not a measured trend; Low/High are ±{band * 100:.1f}%.",
-            f"Baseline is the {BASE_YEAR} census; future indicators are TabPFN estimates.",
+            f"Baseline is the {BASE_YEAR} census; future indicators are {tabpfn_desc} estimates.",
             f"Housing need assumes {HOUSEHOLD_SIZE} people per household.",
         ]
         note = (
-            "Cross-sectional TabPFN model + scenario projection from the 2021 snapshot — "
+            f"{tabpfn_desc} + scenario projection from the {BASE_YEAR} snapshot — "
             "decision-support estimate, not an official forecast."
         )
 
@@ -390,13 +452,6 @@ def run_forecast(
         "housing": housing,
         "recommendations": recs,
         "model": model_name,
-        "assumptions": [
-            f"Baseline is the {BASE_YEAR} census; projection is a scenario estimate, not a measured trend.",
-            f"Expected annual rate {rates['mid']*100:+.1f}% is modulated by a TabPFN structural (youth) signal; Low/High are ±{BAND*100:.1f}%.",
-            f"Housing need assumes {HOUSEHOLD_SIZE} people per household.",
-        ],
-        "note": (
-            "Cross-sectional TabPFN model + scenario projection from the 2021 snapshot — "
-            "decision-support estimate, not an official forecast."
-        ),
+        "assumptions": assumptions,
+        "note": note,
     }

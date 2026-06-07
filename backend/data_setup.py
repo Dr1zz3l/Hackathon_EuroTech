@@ -24,6 +24,8 @@ BUILDING_AGE_PATH = BUILDINGS_DIR / "building_age.csv"
 POP_CENS_DCD_PATH = POPULATION_DIR / "census_dcd.geojson"
 POP_CENS_LTPU_PATH = POPULATION_DIR / "census_ltpu.geojson"
 POP_CENS_STPU_PATH = POPULATION_DIR / "census_stpu.geojson"
+POP_CENS_STPU_2016_PATH = POPULATION_DIR / "census_stpu_2016.geojson"
+POP_CENS_STPU_2011_PATH = POPULATION_DIR / "census_stpu_2011.geojson"
 LOTS_PATH = LOTS_DIR / "lots.geojson"
 DISTRICT_BOUNDARIES_PATH = DISTRICTS_DIR / "district_boundaries.geojson"
 GOVT_LAND_ALLOC_PATH = LAND_DIR / "government_land_allocation.geojson"
@@ -42,6 +44,8 @@ DTM_URL = "https://static.csdi.gov.hk/csdi-webpage/download/43f9ca1bf5695d98885c
 POP_CENS_DCD = "https://static.csdi.gov.hk/csdi-webpage/download/b14f9a883e8d5b0eaf864f1aaa12c38d/geojson"
 POP_CENS_LTPU = "https://static.csdi.gov.hk/csdi-webpage/download/ed8911d0b40a564d87bed46fc00773fa/geojson"
 POP_CENS_STPU = "https://static.csdi.gov.hk/csdi-webpage/download/d5c837b46e55558b8d5fd5c18523a6ea/geojson"
+POP_CENS_STPU_2016 = "https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=censtatd_rcd_1629267205229_40996&format=geojson&layer_name=STPUG_16BC"
+POP_CENS_STPU_2011 = "https://portal.csdi.gov.hk/csdi-webpage/file-api?dataset_id=censtatd_rcd_1629267205229_97980&format=geojson&layer_name=STPUG_11C"
 BUILDINGS_URL = (
     "https://portal.csdi.gov.hk/csdi-webpage/file-api"
     "?dataset_id=landsd_rcd_1637211194312_35158&format=geojson&layer_name=Building"
@@ -144,7 +148,9 @@ def download_buildings():
 def download_population_census():
     _download_to_file(POP_CENS_DCD, POP_CENS_DCD_PATH, "population census (DCD)")
     _download_to_file(POP_CENS_LTPU, POP_CENS_LTPU_PATH, "population census (LTPU)")
-    _download_to_file(POP_CENS_STPU, POP_CENS_STPU_PATH, "population census (STPU)")
+    _download_to_file(POP_CENS_STPU, POP_CENS_STPU_PATH, "population census (STPU 2021)")
+    _download_to_file(POP_CENS_STPU_2016, POP_CENS_STPU_2016_PATH, "population census (STPU 2016)")
+    _download_to_file(POP_CENS_STPU_2011, POP_CENS_STPU_2011_PATH, "population census (STPU 2011)")
 
 
 def download_lots():
