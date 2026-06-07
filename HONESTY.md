@@ -12,7 +12,7 @@ Judges compare this against `git shortlog -sn`, so keep it honest.
 | Member | GitHub handle | Main contributions |
 |---|---|---|
 | Timo Weiss | `Dr1zz3l` | Lead integration: Leaflet map & React components, `App.tsx` wiring, i18n, scoring & reallocation libs, LLM backend, PyVista visualization (39 commits) |
-| Frans Hietaranta | `<fill-in>` | Documentation — README, CLAUDE.md, pitch video guide (11 commits) |
+| Frans Hietaranta | `hietarf` | Documentation — README, CLAUDE.md, pitch video guide (11 commits) |
 | Till Laube | `<fill-in>` | LLM/data backend, scoring lib, Python packaging (9 commits) |
 | Vincent Fiedler | `viincece` | Frontend components & app shell, LLM backend, project config (6 commits) |
 
