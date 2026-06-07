@@ -255,6 +255,7 @@ function AppInner() {
   // ── Switch palette automatically when a scenario activates ──────────────────
   useEffect(() => {
     setPaletteMode(activeScenario ? 'scenario' : 'land')
+    setMapMode('future')
   }, [activeScenario])
 
   // ── Score for selected district/neighbourhood under active scenario ───────────

@@ -186,7 +186,6 @@ function buildDeltaMarker(
   d: District,
   alloc: import('../types').DistrictAllocation | undefined,
   lyr: L.Layer,
-  map: L.Map,
 ): L.Marker | null {
   if (!alloc) return null
 
@@ -240,9 +239,7 @@ function buildDeltaMarker(
   })
 
   void d  // suppress unused warning (name available for debugging)
-  const marker = L.marker(center, { icon, interactive: false, zIndexOffset: 500 })
-  marker.addTo(map)
-  return marker
+  return L.marker(center, { icon, interactive: false, zIndexOffset: 500 })
 }
 
 // ─── Dynamic (agent-created) layer builder ────────────────────────────────────
@@ -471,7 +468,8 @@ export default function MapView({
       // neighbourhood threshold (12.5) is still landed cleanly on 0.25 steps.
       zoomSnap: 0.25,
       zoomDelta: 0.5,
-      wheelPxPerZoomLevel: 120,
+      wheelPxPerZoomLevel: 150,
+      preferCanvas: true,
     })
 
     // ── Cross-fade panes ───────────────────────────────────────────────────────
@@ -511,6 +509,8 @@ export default function MapView({
         subdomains: 'abcd',
         maxZoom: 19,
         opacity: basemapOpacity,
+        updateWhenZooming: false,
+        keepBuffer: 4,
       }
     )
     if (basemapVisible) tile.addTo(map)
@@ -556,7 +556,7 @@ export default function MapView({
 
     const deltaMarkers: L.Marker[] = []
 
-    const useScoreRamp = paletteMode === 'scenario' && activeScenario != null
+    const useScoreRamp = paletteMode === 'scenario' && activeScenario != null && mapMode === 'viability'
 
     const layer = L.geoJSON(geojson as unknown as GeoJSON.GeoJsonObject, {
       pane: 'districtsPane',
@@ -574,11 +574,6 @@ export default function MapView({
         let fillColor: string
         if (useScoreRamp) {
           fillColor = scoreColour(scoreMap.current.get(d.name)?.score ?? 0)
-        } else if (mapMode === 'future' && allocationResult) {
-          const alloc = allocationResult.byDistrict.get(d.name)
-          fillColor = alloc
-            ? dominantLandColourFromUse(alloc.future)
-            : dominantLandColour(d)
         } else {
           fillColor = dominantLandColour(d)
         }
@@ -632,33 +627,45 @@ export default function MapView({
           offset: [0, -4],
         })
 
+        // Pre-build delta marker for this district; shown/hidden on hover only.
+        let deltaMarker: L.Marker | null = null
+        if (!useScoreRamp && activeScenario && mapMode === 'future' && allocationResult) {
+          const alloc = allocationResult.byDistrict.get(d.name)
+          deltaMarker = buildDeltaMarker(d, alloc, lyr)
+          if (deltaMarker) deltaMarkers.push(deltaMarker)
+        }
+
         lyr.on({
           click: () => onSelectDistrict(d),
           mouseover: (e) => {
             const l = e.target as L.Path
-            l.setStyle({ fillOpacity: 0.85 * districtsOpacity, weight: 2 })
+            const hoverStyle: L.PathOptions = { fillOpacity: 0.85 * districtsOpacity, weight: 2 }
+            if (!useScoreRamp && mapMode === 'future' && allocationResult) {
+              const alloc = allocationResult.byDistrict.get(d.name)
+              if (alloc) hoverStyle.fillColor = dominantLandColourFromUse(alloc.future)
+            }
             // Lift the hovered polygon so its full outline reads above neighbours.
+            l.setStyle(hoverStyle)
             l.bringToFront()
+            if (deltaMarker) deltaMarker.addTo(map)
           },
           mouseout: (e) => {
             const l = e.target as L.Path
             const sel = d.name === selectedDistrict?.name
               || d.name === selectedDistrict?.parent_district
-            l.setStyle({
+            const baseStyle: L.PathOptions = {
               fillOpacity: (sel ? 0.88 : 0.7) * districtsOpacity,
               weight: sel ? 2.5 : 1.25,
-            })
+            }
+            if (!useScoreRamp && mapMode === 'future') {
+              baseStyle.fillColor = dominantLandColour(d)
+            }
             // Keep the selected outline on top after the hover ends.
+            l.setStyle(baseStyle)
             raiseHighlighted()
+            if (deltaMarker) deltaMarker.remove()
           },
         })
-
-        // Delta labels for district layer (shown at low zoom)
-        if (!useScoreRamp && activeScenario && mapMode === 'future' && allocationResult) {
-          const alloc = allocationResult.byDistrict.get(d.name)
-          const marker = buildDeltaMarker(d, alloc, lyr, map)
-          if (marker) deltaMarkers.push(marker)
-        }
       },
     })
 
@@ -710,7 +717,7 @@ export default function MapView({
     }
 
     const nbhdDeltaMarkers: L.Marker[] = []
-    const useScoreRamp = paletteMode === 'scenario' && activeScenario != null
+    const useScoreRamp = paletteMode === 'scenario' && activeScenario != null && mapMode === 'viability'
 
     const layer = L.geoJSON(nbhdGeojson as unknown as GeoJSON.GeoJsonObject, {
       pane: 'nbhdPane',
@@ -721,11 +728,6 @@ export default function MapView({
         let fillColor: string
         if (useScoreRamp) {
           fillColor = scoreColour(nbhdScoreMap.current.get(d.name)?.score ?? 0)
-        } else if (mapMode === 'future' && nbhdAllocationResult) {
-          const alloc = nbhdAllocationResult.byDistrict.get(d.name)
-          fillColor = alloc
-            ? dominantLandColourFromUse(alloc.future)
-            : dominantLandColour(d)
         } else {
           fillColor = dominantLandColour(d)
         }
@@ -770,32 +772,44 @@ export default function MapView({
           offset: [0, -4],
         })
 
+        // Pre-build delta marker for this neighbourhood; shown/hidden on hover only.
+        let deltaMarker: L.Marker | null = null
+        if (!useScoreRamp && activeScenario && mapMode === 'future' && nbhdAllocationResult) {
+          const alloc = nbhdAllocationResult.byDistrict.get(d.name)
+          deltaMarker = buildDeltaMarker(d, alloc, lyr)
+          if (deltaMarker) nbhdDeltaMarkers.push(deltaMarker)
+        }
+
         lyr.on({
           click: () => onSelectDistrict(d),
           mouseover: (e) => {
             const l = e.target as L.Path
-            l.setStyle({ fillOpacity: 0.88 * districtsOpacity, weight: 1.5 })
+            const hoverStyle: L.PathOptions = { fillOpacity: 0.88 * districtsOpacity, weight: 1.5 }
+            if (!useScoreRamp && mapMode === 'future' && nbhdAllocationResult) {
+              const alloc = nbhdAllocationResult.byDistrict.get(d.name)
+              if (alloc) hoverStyle.fillColor = dominantLandColourFromUse(alloc.future)
+            }
             // Lift the hovered cell so its full outline reads above neighbours.
+            l.setStyle(hoverStyle)
             l.bringToFront()
+            if (deltaMarker) deltaMarker.addTo(map)
           },
           mouseout: (e) => {
             const l = e.target as L.Path
             const sel = d.name === selectedDistrict?.name
-            l.setStyle({
+            const baseStyle: L.PathOptions = {
               fillOpacity: (sel ? 0.90 : 0.72) * districtsOpacity,
               weight: sel ? 2.5 : 0.75,
-            })
+            }
+            if (!useScoreRamp && mapMode === 'future') {
+              baseStyle.fillColor = dominantLandColour(d)
+            }
             // Keep the selected outline on top after the hover ends.
+            l.setStyle(baseStyle)
             raiseHighlighted()
+            if (deltaMarker) deltaMarker.remove()
           },
         })
-
-        // Delta labels for neighbourhood layer (shown at high zoom only)
-        if (!useScoreRamp && activeScenario && mapMode === 'future' && nbhdAllocationResult) {
-          const alloc = nbhdAllocationResult.byDistrict.get(d.name)
-          const marker = buildDeltaMarker(d, alloc, lyr, map)
-          if (marker) nbhdDeltaMarkers.push(marker)
-        }
       },
     })
 

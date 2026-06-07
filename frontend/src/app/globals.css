@@ -52,6 +52,10 @@ body {
   transition: fill-opacity 120ms ease, stroke-width 120ms ease;
 }
 
+.leaflet-interactive:focus {
+  outline: none;
+}
+
 /* Map container: hide Leaflet's default off-white seam against canvas-soft */
 .leaflet-container {
   background: #f5f5f5 !important;
