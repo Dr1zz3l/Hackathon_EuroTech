@@ -43,7 +43,7 @@ function precomputeNorms(
   let adjacencyNorms: NormStats['adjacency'];
   if (adjacency) {
     const lookup = new Map(districts.map(d => [d.name, d]));
-    const CATS: LandCategory[] = ['residential', 'industrial', 'commercial', 'green', 'educational'];
+    const CATS: LandCategory[] = ['residential', 'industrial', 'commercial', 'agricultural', 'recreational', 'institutional'];
     adjacencyNorms = {};
     for (const cat of CATS) {
       const avgs = districts.map(d => {
@@ -76,7 +76,7 @@ type NeighbourAvgMap = Map<string, Partial<Record<LandCategory, number>>>;
 
 function buildNeighbourAvgs(districts: District[], adjacency: AdjacencyMap): NeighbourAvgMap {
   const lookup = new Map(districts.map(d => [d.name, d]));
-  const CATS: LandCategory[] = ['residential', 'industrial', 'commercial', 'green', 'educational'];
+  const CATS: LandCategory[] = ['residential', 'industrial', 'commercial', 'agricultural', 'recreational', 'institutional'];
   const result: NeighbourAvgMap = new Map();
   for (const d of districts) {
     const neighbours = adjacency[d.name] ?? [];

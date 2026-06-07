@@ -13,12 +13,15 @@ import type { Scenario } from '../types'
 import { useI18n } from '../context/I18nContext'
 
 const LAND_ENTRIES = [
-  { key: 'residential', colour: '#ff0080' },
-  { key: 'industrial',  colour: '#7928ca' },
-  { key: 'commercial',  colour: '#f5a623' },
-  { key: 'green',       colour: '#50e3c2' },
-  { key: 'educational', colour: '#0070f3' },
-  { key: 'other',       colour: '#a1a1a1' },
+  { key: 'residential',    colour: '#ff0080' },
+  { key: 'industrial',     colour: '#7928ca' },
+  { key: 'commercial',     colour: '#f5a623' },
+  { key: 'agricultural',   colour: '#a3c644' },
+  { key: 'recreational',   colour: '#50e3c2' },
+  { key: 'institutional',  colour: '#0070f3' },
+  { key: 'misc',           colour: '#a1a1a1' },
+  { key: 'infrastructure', colour: '#6b7280' },
+  { key: 'protected',      colour: '#1d8a4e' },
 ]
 
 interface MapLegendProps {

@@ -15,19 +15,22 @@ from pydantic import BaseModel, Field
 # Shared sub-types
 # ---------------------------------------------------------------------------
 
-LandCategory = Literal["residential", "industrial", "commercial", "green", "educational"]
+LandCategory = Literal["residential", "industrial", "commercial", "agricultural", "recreational", "institutional"]
 Locale = Literal["en", "yue"]
 
 WEIGHT_KEYS = {"displacement", "age", "headroom", "area", "renewal"}
 
 
 class LandUseInfo(BaseModel):
-    residential: float
-    industrial: float
-    commercial: float
-    green: float
-    educational: float
-    other: float
+    residential:    float
+    industrial:     float
+    commercial:     float
+    agricultural:   float
+    recreational:   float
+    institutional:  float
+    misc:           float
+    infrastructure: float
+    protected:      float
 
 
 class DistrictInfo(BaseModel):
@@ -71,12 +74,13 @@ class WeightOverrides(BaseModel):
 
 
 class DonorWeights(BaseModel):
-    """Per-category donor weight (0 = protected, 1 = neutral, >1 = preferred)."""
-    residential: float | None = None
-    industrial:  float | None = None
-    commercial:  float | None = None
-    green:       float | None = None
-    educational: float | None = None
+    """Per-category donor weight (0 = frozen, 1 = neutral, >1 = preferred donor)."""
+    residential:   float | None = None
+    industrial:    float | None = None
+    commercial:    float | None = None
+    agricultural:  float | None = None
+    recreational:  float | None = None
+    institutional: float | None = None
 
 
 class ParseGoalResponse(BaseModel):
@@ -96,12 +100,15 @@ class ParseGoalResponse(BaseModel):
 
 class CityDelta(BaseModel):
     """City-wide per-category signed fraction delta (area-weighted average)."""
-    residential: float
-    industrial:  float
-    commercial:  float
-    green:       float
-    educational: float
-    other:       float
+    residential:    float
+    industrial:     float
+    commercial:     float
+    agricultural:   float
+    recreational:   float
+    institutional:  float
+    misc:           float
+    infrastructure: float
+    protected:      float
 
 
 class TopDistrict(BaseModel):

@@ -72,12 +72,15 @@ function collectMatches(
 }
 
 const LAND_COLOURS: Record<string, string> = {
-  residential: '#ff0080',
-  industrial:  '#7928ca',
-  commercial:  '#f5a623',
-  green:       '#50e3c2',
-  educational: '#0070f3',
-  other:       '#a1a1a1',
+  residential:    '#ff0080',   // highlight-pink
+  industrial:     '#7928ca',   // violet
+  commercial:     '#f5a623',   // warning amber
+  agricultural:   '#a3c644',   // olive/farmland
+  recreational:   '#50e3c2',   // cyan (parks & open space)
+  institutional:  '#0070f3',   // link blue (GIC)
+  misc:           '#a1a1a1',   // hairline-strong grey
+  infrastructure: '#6b7280',   // slate (roads/rail/airport/port)
+  protected:      '#1d8a4e',   // forest green (country parks/wetlands/reservoirs)
 }
 
 function dominantLandColour(district: District): string {
@@ -200,7 +203,8 @@ function buildDeltaMarker(
 
   const CAT_LABEL: Record<string, string> = {
     residential: 'Res', industrial: 'Ind', commercial: 'Com',
-    green: 'Green', educational: 'Edu', other: 'Other',
+    agricultural: 'Agr', recreational: 'Rec', institutional: 'Ins',
+    misc: 'Misc', infrastructure: 'Infra', protected: 'Prot',
   }
 
   const gainLine = gainPct >= 0.1

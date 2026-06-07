@@ -56,12 +56,15 @@ module.exports = {
         'g-amber':   '#f9cb28',
         // Land-use palette — keyed to the brand gradient stops
         land: {
-          residential: '#ff0080', // highlight-pink
-          industrial:  '#7928ca', // violet
-          commercial:  '#f5a623', // warning amber
-          green:       '#50e3c2', // cyan
-          educational: '#0070f3', // link blue
-          other:       '#a1a1a1', // hairline-strong
+          residential:    '#ff0080', // highlight-pink
+          industrial:     '#7928ca', // violet
+          commercial:     '#f5a623', // warning amber
+          agricultural:   '#a3c644', // olive/farmland
+          recreational:   '#50e3c2', // cyan (parks & open space)
+          institutional:  '#0070f3', // link blue (GIC)
+          misc:           '#a1a1a1', // hairline-strong grey
+          infrastructure: '#6b7280', // slate (roads/rail/airport/port)
+          protected:      '#1d8a4e', // forest green (country parks/wetlands/reservoirs)
         },
       },
       letterSpacing: {

@@ -54,11 +54,15 @@ const TARGET_MAX = 0.70;
 /** Viability floor — prevents division-by-zero; unlikely given 18 real districts. */
 const VIABILITY_EPS = 0.01;
 
-/** Categories that can donate land (never 'other' = transport/water). */
-const DONOR_CATS: LandCategory[] = ['residential', 'industrial', 'commercial', 'green', 'educational'];
+/** Reallocatable categories that can donate or receive land. */
+const DONOR_CATS: LandCategory[] = ['residential', 'industrial', 'commercial', 'agricultural', 'recreational', 'institutional'];
 
-/** All categories including other — used for delta bookkeeping. */
-const ALL_CATS = [...DONOR_CATS, 'other'] as const;
+/**
+ * All 9 categories — used for delta bookkeeping and conservation checks.
+ * Frozen categories (misc, infrastructure, protected) are included so their
+ * fractions are tracked in DistrictAllocation; they are never donors or targets.
+ */
+const ALL_CATS = [...DONOR_CATS, 'misc', 'infrastructure', 'protected'] as const;
 
 // ------------------------------------------------------------
 // Neighbour-average helper (mirrors scoring.ts pattern)
@@ -151,8 +155,8 @@ function applyDonors(
   }, 0);
 
   // CRITICAL-1 fix: when there is nothing to add, return current unchanged.
-  // Do NOT clamp future[target] to TARGET_MAX — a district already at 0.86 green
-  // must stay at 0.86, not silently lose green because it received nothing.
+  // Do NOT clamp future[target] to TARGET_MAX — a district already at a high fraction
+  // must stay there, not silently lose land because it received nothing.
   if (deltaKm2 <= 0) return future;
 
   if (weightedTotal <= 0) {

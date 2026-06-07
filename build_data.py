@@ -113,33 +113,43 @@ _TC_NAME: Dict[str, str] = {
 # BLU.tif encoding (int8):
 #   tens-digit = Class, ones-digit = Sub-category (matches luhk2024_en.csv order)
 #
-# Denominator = DEVELOPABLE land only.  Excluded from denominator (return None):
-#   0 / -128 : sea / nodata
-#   71–74    : Woodland / Shrubland / Grassland / Mangrove-Wetland (protected country park —
-#              cannot be reallocated, treated like sea)
-#   41–44    : Transport infrastructure (Roads / Railways / Airport / Port Facilities —
-#              fixed infrastructure, not reallocatable)
-#   91       : Reservoirs (protected water supply)
+# Denominator = ALL land except ocean and badland.
+# Fractions therefore represent share of all land incl. protected/infrastructure.
 #
-# All fractions are therefore percentages of DEVELOPABLE area, not total district area.
+# Ignored entirely (return None — no denominator contribution):
+#   0 / -128 : sea / nodata
+#   81       : Badland (geologically unstable, not usable or visible)
+#
+# Categories:
+#   Reallocatable: residential, industrial, commercial, agricultural,
+#                  recreational, institutional
+#   Frozen (visible in pie, never reallocated):
+#     misc           — cemeteries, utilities, vacant, other built-up
+#     infrastructure — roads, railways, airport, port
+#     protected      — woodland, shrubland, grassland, wetland, reservoirs
 # ─────────────────────────────────────────────────────────────
 
-# Pixel codes excluded entirely from the developable-land denominator
+# Pixel codes excluded entirely (not counted in any denominator)
 _EXCLUDED = frozenset({
-    0, -128,          # sea / nodata
-    71, 72, 73, 74,   # Woodland / Shrubland / Grassland / Mangrove-Wetland (protected natural)
-    41, 42, 43, 44,   # Roads / Railways / Airport / Port Facilities (fixed transport)
-    91,               # Reservoirs (protected water supply)
+    0, -128,   # sea / nodata
+    81,        # Badland — geologically unstable, ignored everywhere
 })
 
-# Minimum developable pixels for a district — below this fall back to heuristic
+# Minimum total (non-ocean) pixels for a district — below this fall back to heuristic
 _MIN_DEV_PIXELS = 500
+
+# All 9 land categories: 6 reallocatable + 3 frozen
+CATEGORIES = [
+    "residential", "industrial", "commercial",
+    "agricultural", "recreational", "institutional",
+    "misc", "infrastructure", "protected",
+]
 
 def _bucket(code: int) -> str | None:
     """Return the land category bucket for a BLU raster pixel value, or None to exclude.
 
-    Returns None for sea, nodata, protected natural land, transport infrastructure,
-    and protected reservoirs — all excluded from the developable-land denominator.
+    None only for sea/nodata (0, -128) and badland (81).
+    All other codes map to one of the 9 land categories.
     """
     if code in _EXCLUDED:
         return None
@@ -150,71 +160,72 @@ def _bucket(code: int) -> str | None:
     if code in (21, 22, 23):
         return "industrial"     # Industrial Land / Estates / Warehouse & Open Storage
     if code == 31:
-        return "educational"    # Government/Institution/Community (GIC)
-    if code in (32, 61, 62):
-        return "green"          # Open Space & Recreation / Agriculture / Fish Ponds
-    # Remaining: cemeteries (51), utilities (52), vacant/construction (53), misc (54),
-    #            barren (81,83), streams/nullahs (92) → other
-    return "other"
+        return "institutional"  # Government/Institution/Community (GIC)
+    if code in (32, 83, 92):
+        return "recreational"   # Open Space & Recreation / Rocky Shore / Streams
+    if code in (61, 62):
+        return "agricultural"   # Agricultural Land / Fish Ponds & Gei Wais
+    if code in (51, 52, 53, 54):
+        return "misc"           # Cemeteries / Utilities / Vacant & Construction / Other built-up
+    if code in (41, 42, 43, 44):
+        return "infrastructure" # Roads & Transport / Railways / Airport / Port Facilities
+    if code in (71, 72, 73, 74, 91):
+        return "protected"      # Woodland / Shrubland / Grassland / Wetland / Reservoirs
+    # Fallback (should not occur with known LUMHK codes)
+    return "misc"
 
 
 # ─────────────────────────────────────────────────────────────
-# §3.3 Heuristic fallback (used only if raster file absent)
+# §3.3 Heuristic fallback (used only if raster file absent or pixel count too low)
 #
-# Priors are fractions of DEVELOPABLE land (same denominator as the raster path):
-# natural land, transport, reservoirs excluded — matching what _bucket produces.
-# Derived from raster_2024 zonal stats as representative estimates.
+# Territory-wide average fractions from raster_2024 zonal stats.
+# Used for any district that falls below _MIN_DEV_PIXELS — all 18 districts
+# are fully covered by the raster, so this path is only a safety net.
+#
+# Keys: all 9 categories (6 reallocatable + 3 frozen).
+# Density nudge adjusts the reallocatable residential/green fractions only;
+# frozen categories (infrastructure, protected, misc) are kept as territory average.
 # ─────────────────────────────────────────────────────────────
 
-_PRIOR: Dict[str, Tuple[float, ...]] = {
-    # (residential, industrial, commercial, green, educational, other)
-    # green = open space + agriculture (NOT woodland/shrubland/grassland)
-    "Central & Western": (0.43, 0.01, 0.12, 0.16, 0.19, 0.11),
-    "Wan Chai":          (0.37, 0.00, 0.09, 0.21, 0.20, 0.13),
-    "Eastern":           (0.44, 0.03, 0.04, 0.16, 0.19, 0.15),
-    "Southern":          (0.31, 0.03, 0.02, 0.21, 0.17, 0.26),
-    "Yau Tsim Mong":     (0.29, 0.02, 0.17, 0.19, 0.18, 0.14),
-    "Sham Shui Po":      (0.35, 0.04, 0.02, 0.14, 0.19, 0.26),
-    "Kowloon City":      (0.36, 0.02, 0.04, 0.14, 0.18, 0.26),
-    "Wong Tai Sin":      (0.50, 0.02, 0.03, 0.19, 0.12, 0.13),
-    "Kwun Tong":         (0.46, 0.08, 0.06, 0.15, 0.13, 0.12),
-    "Kwai Tsing":        (0.33, 0.23, 0.02, 0.16, 0.12, 0.15),
-    "Tsuen Wan":         (0.29, 0.07, 0.02, 0.35, 0.08, 0.19),
-    "Tuen Mun":          (0.27, 0.11, 0.01, 0.10, 0.10, 0.41),
-    "Yuen Long":         (0.25, 0.19, 0.00, 0.38, 0.03, 0.14),
-    "North":             (0.20, 0.08, 0.00, 0.45, 0.04, 0.23),
-    "Tai Po":            (0.31, 0.07, 0.00, 0.39, 0.09, 0.14),
-    "Sha Tin":           (0.35, 0.04, 0.02, 0.22, 0.17, 0.20),
-    "Sai Kung":          (0.24, 0.05, 0.01, 0.37, 0.08, 0.25),
-    "Islands":           (0.20, 0.01, 0.02, 0.30, 0.13, 0.35),
+# Territory-wide average 9-key fractions (safety-net fallback)
+_TERRITORY_AVG: Dict[str, float] = {
+    "residential":    0.09,
+    "industrial":     0.03,
+    "commercial":     0.01,
+    "agricultural":   0.05,
+    "recreational":   0.08,
+    "institutional":  0.07,
+    "misc":           0.04,
+    "infrastructure": 0.13,
+    "protected":      0.50,
 }
 
 
-def _density_nudge(priors: Tuple[float, ...], density: int) -> Tuple[float, ...]:
-    r, i, c, g, e, o = priors
+def _density_nudge(priors: Dict[str, float], density: int) -> Dict[str, float]:
+    """Nudge residential/recreational fractions based on density and renormalise."""
+    p = dict(priors)
     if density > 30_000:
         delta = min(0.08, (density - 30_000) / 200_000)
-        r = r + delta * 0.5; c = c + delta * 0.3
-        g = max(0.03, g - delta * 0.6); o = max(0.05, o - delta * 0.2)
+        p["residential"]  = p["residential"]  + delta * 0.5
+        p["commercial"]   = p["commercial"]   + delta * 0.3
+        p["recreational"] = max(0.01, p["recreational"] - delta * 0.6)
+        p["misc"]         = max(0.02, p["misc"]         - delta * 0.2)
     elif density < 3_000:
         delta = min(0.10, (3_000 - density) / 30_000)
-        g = min(0.85, g + delta); r = max(0.05, r - delta * 0.5)
-        i = max(0.01, i - delta * 0.3)
-    total = r + i + c + g + e + o
-    return (r/total, i/total, c/total, g/total, e/total, o/total)
+        p["protected"]    = min(0.85, p["protected"]    + delta)
+        p["residential"]  = max(0.02, p["residential"]  - delta * 0.5)
+        p["industrial"]   = max(0.01, p["industrial"]   - delta * 0.3)
+    total = sum(p.values())
+    return {k: v / total for k, v in p.items()}
 
 
 def land_from_heuristic() -> Dict[str, dict]:
     """§3.3 fallback: returns {census_key: land_dict} with land_source='estimated'."""
     result: Dict[str, dict] = {}
-    for key, (pop, _, _, density) in CENSUS.items():
-        r, i, c, g, e, o = _density_nudge(_PRIOR[key], density)
-        result[key] = {
-            "residential": round(r, 4), "industrial": round(i, 4),
-            "commercial":  round(c, 4), "green":      round(g, 4),
-            "educational": round(e, 4), "other":      round(o, 4),
-            "_source": "estimated",
-        }
+    for key, (_, _, _, density) in CENSUS.items():
+        nudged = _density_nudge(_TERRITORY_AVG, density)
+        result[key] = {k: round(v, 4) for k, v in nudged.items()}
+        result[key]["_source"] = "estimated"
     return result
 
 
@@ -227,14 +238,14 @@ def land_from_raster(boundary_features: list) -> Dict[str, dict]:
     Compute per-district land-use fractions from the LUMHK 2024 raster.
     Reprojects each district polygon from WGS84 → EPSG:2326 (HK Grid) before masking.
     Returns {census_key: land_dict} with _source='raster_2024'.
+
+    Denominator = all non-ignored pixels (everything except ocean + badland).
+    Fractions therefore include frozen categories (protected, infrastructure, misc).
     """
     tf = Transformer.from_crs("EPSG:4326", "EPSG:2326", always_xy=True).transform
-    CATEGORIES = ["residential", "industrial", "commercial", "green", "educational", "other"]
     result: Dict[str, dict] = {}
 
     with rasterio.open(RASTER_PATH) as ds:
-        nodata = ds.nodata
-
         for feat in boundary_features:
             raw_name = feat["properties"]["NAME_EN"].strip()
             census_key = _NAME_MAP[raw_name]
@@ -247,7 +258,7 @@ def land_from_raster(boundary_features: list) -> Dict[str, dict]:
             out, _ = rasterio_mask(ds, [mapping(geom_2326)], crop=True, filled=True)
             arr = out[0].astype(int)
 
-            # Tally pixel counts by bucket (exclude nodata / sea)
+            # Tally pixel counts by bucket (exclude sea/nodata/badland)
             pixel_totals: Dict[str, int] = {}
             vals, counts = np.unique(arr, return_counts=True)
             for v, c in zip(vals.tolist(), counts.tolist()):
@@ -258,17 +269,13 @@ def land_from_raster(boundary_features: list) -> Dict[str, dict]:
             total_land = sum(pixel_totals.values())
             if total_land < _MIN_DEV_PIXELS:
                 if total_land > 0:
-                    print(f"  WARNING: {census_key} — only {total_land} developable pixels (< {_MIN_DEV_PIXELS}), using heuristic")
+                    print(f"  WARNING: {census_key} — only {total_land} land pixels (< {_MIN_DEV_PIXELS}), using heuristic")
                 else:
-                    print(f"  WARNING: {census_key} — zero developable pixels, using heuristic")
-                # Fallback to heuristic for this one district
-                r, i_, c_, g, e, o = _density_nudge(_PRIOR[census_key], CENSUS[census_key][3])
-                result[census_key] = {
-                    "residential": round(r, 4), "industrial": round(i_, 4),
-                    "commercial":  round(c_, 4), "green":     round(g,  4),
-                    "educational": round(e, 4),  "other":     round(o,  4),
-                    "_source": "estimated",
-                }
+                    print(f"  WARNING: {census_key} — zero land pixels, using heuristic")
+                # Fallback to territory-average heuristic for this district
+                nudged = _density_nudge(_TERRITORY_AVG, CENSUS[census_key][3])
+                result[census_key] = {k: round(v, 4) for k, v in nudged.items()}
+                result[census_key]["_source"] = "estimated"
             else:
                 land = {cat: round(pixel_totals.get(cat, 0) / total_land, 4) for cat in CATEGORIES}
                 # Renormalise to guarantee sum = 1.0 exactly (floating-point rounding)
@@ -355,7 +362,10 @@ def build() -> None:
 
     # 4. Assemble GeoJSON features
     print("\n[4/4] Assembling features...")
-    header = f"{'District':28s}  {'source':11s}  res    ind    com    grn    edu    oth    age_share"
+    header = (
+        f"{'District':28s}  {'source':11s}  "
+        f"res    ind    com    agr    rec    ins    mis    inf    prt    age_share"
+    )
     print(f"  {header}")
     print("  " + "-" * len(header))
 
@@ -367,7 +377,7 @@ def build() -> None:
 
         land_data = land_map[census_key]
         source = land_data["_source"]
-        land = {k: land_data[k] for k in ("residential", "industrial", "commercial", "green", "educational", "other")}
+        land = {k: land_data[k] for k in CATEGORIES}
 
         props: dict = {
             "name":       census_key,
@@ -386,7 +396,8 @@ def build() -> None:
         share_str = f"{shares[census_key]:.3f}" if census_key in shares else "  n/a"
         print(f"  {census_key:28s}  {source:11s}  "
               f"{land['residential']:.3f}  {land['industrial']:.3f}  {land['commercial']:.3f}  "
-              f"{land['green']:.3f}  {land['educational']:.3f}  {land['other']:.3f}  {share_str}")
+              f"{land['agricultural']:.3f}  {land['recreational']:.3f}  {land['institutional']:.3f}  "
+              f"{land['misc']:.3f}  {land['infrastructure']:.3f}  {land['protected']:.3f}  {share_str}")
 
         features.append({
             "type":       "Feature",
@@ -405,11 +416,12 @@ def build() -> None:
     names = [f["properties"]["name"] for f in features]
     assert len(names) == 18, f"Expected 18 districts, got {len(names)}"
 
+    _EXPECTED_LAND_KEYS = set(CATEGORIES)
     for f in features:
         n = f["properties"]["name"]
         land = f["properties"]["land"]
-        assert set(land.keys()) == {"residential", "industrial", "commercial", "green", "educational", "other"}, \
-            f"{n}: unexpected land keys {set(land.keys())}"
+        assert set(land.keys()) == _EXPECTED_LAND_KEYS, \
+            f"{n}: unexpected land keys {set(land.keys())} (expected {_EXPECTED_LAND_KEYS})"
         total = sum(land.values())
         assert abs(total - 1.0) < 1e-2, f"{n}: land fractions sum to {total:.4f}"
 

@@ -3,26 +3,42 @@
 // Do NOT change unilaterally. Coordinate before editing.
 // ============================================================
 
-/** The five planning categories tracked per district. */
+/**
+ * The six reallocatable planning categories.
+ * These are the only categories that can be scenario targets or land donors.
+ * Frozen categories (misc, infrastructure, protected) are part of LandUse
+ * but never appear as LandCategory — they cannot be targeted or donated.
+ */
 export type LandCategory =
   | 'residential'
   | 'industrial'
   | 'commercial'
-  | 'green'
-  | 'educational';
+  | 'agricultural'
+  | 'recreational'
+  | 'institutional';
 
 /**
  * Land-use fractions for one district.
- * Each value is in [0, 1]; values sum to ≤ 1 (remainder is `other`).
+ * All 9 values are in [0, 1]; values sum to ≈ 1 (all land except ocean + badland).
+ *
+ * Reallocatable (6): residential, industrial, commercial, agricultural,
+ *   recreational, institutional — these can be scenario targets or donors.
+ * Frozen (3): misc, infrastructure, protected — visible in the pie chart
+ *   but never touched by the reallocation engine.
  */
 export interface LandUse {
-  residential: number;
-  industrial:  number;
-  commercial:  number;
-  green:       number;
-  educational: number;
-  /** Transport / water / barren — kept visible; never hidden. */
-  other:       number;
+  residential:    number;
+  industrial:     number;
+  commercial:     number;
+  agricultural:   number;
+  recreational:   number;
+  institutional:  number;
+  /** Cemeteries / utilities / vacant / other built-up — visible, never reallocated. */
+  misc:           number;
+  /** Roads / railways / airport / port — visible, never reallocated. */
+  infrastructure: number;
+  /** Woodland / shrubland / grassland / wetland / reservoirs — visible, never reallocated. */
+  protected:      number;
 }
 
 /**
@@ -143,8 +159,9 @@ export interface Scenario {
   custom_label?:   string;
   /**
    * Stage 2 — per-category donor weight for the reallocation engine.
-   * Protected category = weight 0; preferred = weight 1.0; de-emphasised = 0.2–0.4.
-   * Missing keys default to 1.0 (neutral). `other` and the target are never donors.
+   * Only reallocatable LandCategory keys are valid here.
+   * Protected = weight 0; preferred = weight 1.0; de-emphasised = 0.2–0.4.
+   * Missing keys default to 1.0 (neutral). The target is never a donor.
    */
   donor_weights?:  Partial<Record<LandCategory, number>>;
 }
