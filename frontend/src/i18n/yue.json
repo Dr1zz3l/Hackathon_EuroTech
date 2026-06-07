@@ -2,7 +2,7 @@
   "app.title": "Metropo",
   "app.subtitle": "都市規劃系統",
 
-  "scenario.none.label": "預設檢視",
+  "scenario.none.label": "現狀",
   "scenario.green_hk_2050.label": "綠化香港2050",
   "scenario.green_hk_2050.description": "2050年增加20%綠化空間 — 善用低壓力可轉換土地",
   "scenario.industrial_growth.label": "工業發展",

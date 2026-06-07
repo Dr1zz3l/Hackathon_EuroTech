@@ -2,7 +2,7 @@
   "app.title": "Metropo",
   "app.subtitle": "Urban City Planner",
 
-  "scenario.none.label": "Default view",
+  "scenario.none.label": "State today",
   "scenario.green_hk_2050.label": "Green HK 2050",
   "scenario.green_hk_2050.description": "+20% green space by 2050 — convertible low-pressure land",
   "scenario.industrial_growth.label": "Industrial Growth",
