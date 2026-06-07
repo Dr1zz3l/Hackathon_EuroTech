@@ -4,6 +4,8 @@
 
 An interactive map of Hong Kong's 18 administrative districts that takes a city-planning goal (e.g. "+20% green space by 2050") and ranks which districts can meet it with the most spare capacity and the least displacement — with transparent, explainable reasons for every recommendation.
 
+![HK District Viability Map — landing view](docs/images/landing.png)
+
 ---
 
 ## What it does
@@ -17,6 +19,8 @@ An interactive map of Hong Kong's 18 administrative districts that takes a city-
 - **EN / Traditional Chinese** — full bilingual UI, 135/135 key parity.
 
 **Demo flow:** open the map → select *Industrial Growth* → tap Tuen Mun → see land mix, demographics + future land donut / trade list → switch to 廣東話 → type "more green space by 2050" in the assistant.
+
+![Industrial Growth scenario with Kowloon City selected — land mix and demographics breakdown](docs/images/scenario-breakdown.png)
 
 ---
 
