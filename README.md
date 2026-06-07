@@ -15,7 +15,7 @@ An interactive map of Hong Kong's 18 administrative districts that takes a city-
 - **WLC viability engine** — AHP-derived weighted-sum scores (displacement, headroom, area, ageing stock, adjacency) drive the reallocation planner's district weighting. Weights are transparent and scenario-specific.
 - **Land reallocation planner** — a genuine bounded quadratic programme (KKT + bisection) distributes a planning target across 211 sub-district neighbourhoods, then aggregates back to districts. Shows what each district donates and what it receives.
 - **Forecast** — compound-growth projection (Low / Expected / High) driven by **measured 2011–2021 census CAGRs** for all 18 districts and 189 neighbourhoods. Future `median_age` / `pct_over65` indicators are predicted by TabPFN trained on the full **2011/2016/2021 temporal panel** (600+ rows, `year` as a feature) — a learned time-trend, not a cross-sectional proxy. Planning recommendations cover housing supply, ageing, open space, and school demand.
-- **AI assistant** — streaming Claude chat that can *drive the map*: it creates analytical layers on request (heatmap / choropleth / bubble of any metric — e.g. *"highlight the areas with the oldest buildings"*), highlights and zooms to districts, ranks them, and answers questions — plus goal parsing, score explanations, plan summaries, Reddit social-listening, and demographic prediction. The assistant visualises and explains; the **planner** does the reallocation — the two are distinct.
+- **AI assistant** — streaming Claude chat that can *drive the map*: it creates analytical layers on request (heatmap / choropleth / bubble of any metric — e.g. *"highlight the areas with the oldest buildings"*), highlights and zooms to districts, ranks them, and answers questions — plus goal parsing, score explanations, plan summaries, and demographic prediction. The assistant visualises and explains; the **planner** does the reallocation — the two are distinct.
 - **EN / Traditional Chinese** — full bilingual UI, 135/135 key parity.
 
 **Demo flow:** open the map → select *Industrial Growth* → tap Tuen Mun → see land mix, demographics + future land donut / trade list → switch to 廣東話 → type "more green space by 2050" in the assistant.
@@ -91,7 +91,6 @@ The frontend dev server proxies `/api/*` → `localhost:8000` automatically (see
 |---|---|---|
 | `ANTHROPIC_API_KEY` | **Required** for LLM features | Claude API key |
 | `TABPFN_TOKEN` | Optional | Enables real TabPFN v2; falls back to a labelled kNN baseline without it |
-| `REDDIT_CLIENT_ID` / `REDDIT_CLIENT_SECRET` | Optional | Enables OAuth Reddit access; falls back to public (no-auth) endpoints |
 
 See `.env.example` for setup instructions.
 
@@ -169,7 +168,6 @@ backend/llm/
   forecast.py           # compound-growth projection + temporal TabPFN panel
   history.py            # measured CAGR loader (population_history.csv)
   panel.py              # temporal census panel loader (census_panel.json)
-  social.py             # Reddit social-listening (24 h cache)
 
 data/population/
   census_stpu.geojson         # 2021 STPU census (211 units)
