@@ -35,6 +35,7 @@ from fastapi.responses import StreamingResponse
 
 from .client import get_async_client
 from .data import (
+    ALL_METRICS,
     DISTRICT_NAMES,
     NEIGHBOURHOODS,
     field_catalogue_text,
@@ -44,7 +45,7 @@ from .data import (
 )
 from .forecast import run_forecast
 from .predict import tabpfn_predict
-from .schemas import ChatRequest
+from .schemas import AppState, ChatRequest
 from .social import AUDIENCE_SUBREDDITS, fetch_social_digest
 
 logger = logging.getLogger(__name__)
@@ -56,7 +57,11 @@ CHAT_MODEL = os.environ.get("CHAT_MODEL", "claude-sonnet-4-6")
 
 # Cap the agentic loop so a misbehaving model can't spin forever.
 MAX_TURNS = 6
-MAX_TOKENS = 1024
+# 2048 gives room for the structured social_listening synthesis (0–100 score +
+# bullet sections + numbered action steps) and multi-part forecast answers,
+# without inviting open-ended rambling. Sonnet streams, so the latency impact
+# is only on genuinely long final answers.
+MAX_TOKENS = 2048
 
 # Tools whose execution is a frontend effect (no server-side work).
 CLIENT_TOOLS = {"highlight_map", "zoom_to", "add_layer", "remove_layer"}
@@ -403,6 +408,12 @@ TOOLS: list[dict] = [
             },
             "required": ["unit"],
         },
+        # ── Prompt-caching marker ──────────────────────────────────────────
+        # Placing cache_control on the LAST tool caches the entire tools array
+        # as a prefix. The 9-tool array + system prompt comfortably exceed
+        # Sonnet 4.6's 2048-token minimum, saving ~0.9× input cost on each of
+        # the up-to-6 iterations per user turn and across consecutive turns.
+        "cache_control": {"type": "ephemeral"},
     },
 ]
 
@@ -421,6 +432,19 @@ You are the map assistant for an interactive Hong Kong urban-planning tool. \
 You help city planners explore the 18 districts of Hong Kong, answer questions \
 about the data, and control the map to illustrate your answers.
 
+Data vintage: all figures are from the 2021 Census and the Planning Department's \
+2024 land-use raster. They are a snapshot — not live. The current date is \
+provided separately in the app-state block below.
+
+## Current app state
+The "Current app state" section (appended below this system prompt each turn) \
+tells you what the user is currently looking at: the selected district or \
+neighbourhood, the active planning scenario, and every analytical layer \
+currently on the map. Always resolve "this district", "that layer", "the \
+selected area", "remove that overlay", and similar referents against it. \
+If a layer is referenced, use its exact label from that list. If no state is \
+provided, ask the user to tap a district or describe what they mean.
+
 ## The map — two levels of detail
 The data exists at TWO geographic granularities:
 - **District** (18 units): {names}.
@@ -437,6 +461,14 @@ granularity='neighbourhood', and parent_district when scoped to one district).
 When you mention specific places, call `highlight_map` so the user can see them \
 (district OR neighbourhood names both work), and `zoom_to` when focusing on one. \
 Use `highlight_map` with an empty list to clear highlights when changing topic.
+
+## Tool-sequencing examples
+- "Which neighbourhood in Kwun Tong is most elderly?" → \
+rank_districts(metric='pct_over65', granularity='neighbourhood', \
+parent_district='Kwun Tong', limit=3), then highlight_map on the top results.
+- "Show me a heatmap of recreational land" → \
+add_layer(type='heatmap', metric='land.recreational', \
+granularity='neighbourhood'), then one sentence describing what it shows.
 
 ## Creating map layers
 When the user asks to "show", "map", "visualise", or "heatmap" a metric across \
@@ -514,12 +546,113 @@ in this dataset and offer the closest available proxy.
 """
 
 
+def _app_state_text(app_state: AppState | None) -> str | None:
+    """
+    Render a compact plain-text block describing the live app state.
+    Returns None when no state is available (omit the block entirely).
+    """
+    if app_state is None:
+        return None
+
+    lines: list[str] = ["## Current app state"]
+
+    if app_state.selected:
+        lines.append(
+            f"Selected unit: {app_state.selected.name} "
+            f"({app_state.selected.granularity})"
+        )
+    else:
+        lines.append("Selected unit: none (user has not tapped a district yet)")
+
+    if app_state.scenario:
+        lines.append(
+            f"Active scenario: {app_state.scenario.label} "
+            f"(id={app_state.scenario.id}, target={app_state.scenario.target})"
+        )
+    else:
+        lines.append("Active scenario: none (default view)")
+
+    lines.append(f"Map zoom level: {app_state.mapGranularity}")
+
+    if app_state.layers:
+        layer_list = ", ".join(
+            f'"{l.label}" ({l.type}, {l.metric}, {l.granularity}'
+            + ('' if l.visible else ', hidden')
+            + ')'
+            for l in app_state.layers
+        )
+        lines.append(f"Analytical layers on map: {layer_list}")
+    else:
+        lines.append("Analytical layers on map: none")
+
+    return "\n".join(lines)
+
+
 # ---------------------------------------------------------------------------
 # SSE helpers
 # ---------------------------------------------------------------------------
 
 def _sse(obj: dict) -> str:
     return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
+
+
+# Granularity the frontend uses when STPU data isn't loaded (conservative).
+_DISTRICT_ONLY_METRICS = {"ageing_building_share"}
+
+
+def _ack_client_tool(name: str, tool_input: dict) -> dict:
+    """
+    Return an honest tool_result for a frontend-executed map command.
+
+    For add_layer: validate the metric against the known catalogue and echo
+    back the resolved spec so the model knows exactly what was placed on the
+    map (or why it failed). For other client tools the result is a simple ack.
+    """
+    if name == "add_layer":
+        metric = str(tool_input.get("metric", "")).strip()
+        if not metric:
+            return {"ok": False, "error": "metric is required for add_layer"}
+        if metric not in ALL_METRICS:
+            valid = ", ".join(sorted(ALL_METRICS))
+            return {
+                "ok": False,
+                "error": (
+                    f'Unknown metric "{metric}". '
+                    f"Valid metrics: {valid}."
+                ),
+            }
+        layer_type = str(tool_input.get("type", "choropleth")).lower()
+        if layer_type not in ("heatmap", "choropleth", "bubble"):
+            layer_type = "choropleth"
+
+        # Report effective granularity: district-only metrics are silently
+        # downgraded on the frontend; reflect that back to the model so it
+        # doesn't describe neighbourhood-level detail that wasn't rendered.
+        requested_gran = str(tool_input.get("granularity", ""))
+        if metric in _DISTRICT_ONLY_METRICS:
+            effective_gran = "district"
+        elif requested_gran == "neighbourhood":
+            effective_gran = "neighbourhood"
+        else:
+            effective_gran = "district" if layer_type != "heatmap" else "neighbourhood"
+
+        label = str(tool_input.get("label", "") or ALL_METRICS.get(metric, metric))
+        return {
+            "ok": True,
+            "layer_added": {
+                "type": layer_type,
+                "metric": metric,
+                "granularity": effective_gran,
+                "label": label,
+            },
+            "note": (
+                "Layer rendered on the map. The user can toggle or delete it in "
+                "the Layers panel."
+            ),
+        }
+
+    # highlight_map, zoom_to, remove_layer — benign; simple ack is fine.
+    return {"ok": True, "executed_on": "client"}
 
 
 def _execute_server_tool(name: str, tool_input: dict) -> dict:
@@ -576,7 +709,21 @@ def _execute_server_tool(name: str, tool_input: dict) -> dict:
 
 async def _event_stream(req: ChatRequest):
     client = get_async_client()
-    system = _system_prompt(req.locale)
+
+    # ── Build the system block list (Part C: prompt caching) ─────────────────
+    # The static system prompt is the cached prefix (block 1).
+    # The volatile app-state snapshot is a separate uncached block (block 2)
+    # so that the cached prefix key stays stable across turns even as the
+    # selected district / active layers change.
+    static_block: dict = {
+        "type": "text",
+        "text": _system_prompt(req.locale),
+        "cache_control": {"type": "ephemeral"},
+    }
+    system_blocks: list[dict] = [static_block]
+    state_text = _app_state_text(req.app_state)
+    if state_text:
+        system_blocks.append({"type": "text", "text": state_text})
 
     # Seed the conversation with the plain-text history from the client.
     messages: list[dict] = [
@@ -590,7 +737,7 @@ async def _event_stream(req: ChatRequest):
             async with client.messages.stream(
                 model=CHAT_MODEL,
                 max_tokens=MAX_TOKENS,
-                system=system,
+                system=system_blocks,
                 tools=TOOLS,
                 messages=messages,
             ) as stream:
@@ -611,9 +758,10 @@ async def _event_stream(req: ChatRequest):
             for tu in tool_uses:
                 tool_input = tu.input if isinstance(tu.input, dict) else {}
                 if tu.name in CLIENT_TOOLS:
-                    # Frontend effect — emit the command, ack to the model.
+                    # Frontend effect — emit the command so the browser executes
+                    # it, then return an honest tool_result to the model.
                     yield _sse({"type": "map_command", "name": tu.name, "input": tool_input})
-                    result: dict = {"ok": True, "executed_on": "client"}
+                    result: dict = _ack_client_tool(tu.name, tool_input)
                 else:
                     yield _sse({"type": "tool", "name": tu.name, "status": "running"})
                     # TabPFN inference is CPU-bound (torch); social_listening does

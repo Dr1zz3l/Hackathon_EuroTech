@@ -17,12 +17,18 @@
 import { type FormEvent, useEffect, useRef, useState } from 'react'
 import { useI18n } from '../context/I18nContext'
 import type { Locale } from '../context/I18nContext'
-import { streamChat, type ChatTurn, type MapCommand } from '../lib/chat'
+import { streamChat, type AppState, type ChatTurn, type MapCommand } from '../lib/chat'
 import { BoltIcon, SendIcon } from './Icons'
 
 interface AssistantPanelProps {
   /** Forward map-control commands (highlight / zoom) up to App → MapView. */
   onMapCommand: (cmd: MapCommand) => void
+  /**
+   * Called at send-time (not render-time) to get a fresh snapshot of live app
+   * state (selected district, active scenario, layer list, zoom level). Using a
+   * callback avoids stale-closure issues compared to passing the value as a prop.
+   */
+  getAppState: () => AppState
 }
 
 // Suggested opening prompts — one tap to demo the assistant.
@@ -32,7 +38,7 @@ const SUGGESTION_KEYS = [
   'assistant.suggest.greenest',
 ] as const
 
-export default function AssistantPanel({ onMapCommand }: AssistantPanelProps) {
+export default function AssistantPanel({ onMapCommand, getAppState }: AssistantPanelProps) {
   const { t, locale } = useI18n()
 
   const [messages, setMessages] = useState<ChatTurn[]>([])
@@ -69,7 +75,7 @@ export default function AssistantPanel({ onMapCommand }: AssistantPanelProps) {
     abortRef.current = controller
 
     try {
-      await streamChat(history, locale as Locale, {
+      await streamChat(history, locale as Locale, getAppState(), {
         onText: (delta) => {
           acc += delta
           setStreaming(acc)

@@ -43,7 +43,7 @@ import {
   buildSyntheticScenario, buildPlanSummaryPayload,
   parseGoal, summarizePlan, BASE_WEIGHTS,
 } from './lib/llm'
-import type { MapCommand } from './lib/chat'
+import type { AppState, MapCommand } from './lib/chat'
 import {
   type DynamicLayer, validateAddLayer, describeLayer, rampCssGradient,
 } from './lib/dynamicLayers'
@@ -497,6 +497,30 @@ function AppInner() {
   const neighbourhoodLayer = layers.find(l => l.id === 'neighbourhoods')!
   const basemapLayer       = layers.find(l => l.id === 'basemap')!
 
+  // ── Live app-state snapshot for the conversational assistant ─────────────────
+  // Updated in a ref on every render so the getAppState callback is always
+  // stable (never recreated) but always returns the latest values.
+  const _appStateRef = useRef<AppState>({
+    selected: null, scenario: null, layers: [], mapGranularity: 'district',
+  })
+  _appStateRef.current = {
+    selected: selectedDistrict
+      ? { name: selectedDistrict.name, granularity: selectedDistrict.tpu_code ? 'neighbourhood' : 'district' }
+      : null,
+    scenario: activeScenario
+      ? { id: activeScenario.id, target: activeScenario.target, label: activeScenario.custom_label ?? t(activeScenario.label_key) }
+      : null,
+    // orderedDynamicLayers is computed below in the same render — snapshot the
+    // raw dynamicLayers here (order doesn't matter for the model's purposes).
+    layers: dynamicLayers.map(l => ({
+      id: l.id, label: l.label, metric: l.metric,
+      type: l.type, granularity: l.granularity, visible: l.visible,
+    })),
+    mapGranularity: activeLevel,
+  }
+  // Stable callback: App → ChatPanel → AssistantPanel reads at send-time.
+  const getAppState = useCallback((): AppState => _appStateRef.current, [])
+
   // Resolve the unified `layerOrder` (top→bottom) into concrete rows for the
   // panel, and into the dynamic-overlay list (top→bottom) the map stacks.
   const { panelLayers, orderedDynamicLayers } = useMemo(() => {
@@ -576,6 +600,7 @@ function AppInner() {
           onGoal={handleGoal}
           plannerMessage={plannerMessage}
           onMapCommand={handleMapCommand}
+          getAppState={getAppState}
         />
 
         {/* Left: layers panel */}

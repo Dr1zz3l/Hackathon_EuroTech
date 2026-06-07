@@ -18,7 +18,7 @@
 import { type FormEvent, useState } from 'react'
 import { useI18n } from '../context/I18nContext'
 import type { WeightSet } from '../types'
-import type { MapCommand } from '../lib/chat'
+import type { AppState, MapCommand } from '../lib/chat'
 import AssistantPanel from './AssistantPanel'
 import {
   BoltIcon,
@@ -55,6 +55,8 @@ interface ChatPanelProps {
   plannerMessage: PlannerMessage | null
   /** Map-control commands emitted by the conversational assistant. */
   onMapCommand: (cmd: MapCommand) => void
+  /** Returns a live app-state snapshot at call-time for the assistant. */
+  getAppState: () => AppState
 }
 
 // ─── Component ───────────────────────────────────────────────────────────────
@@ -65,6 +67,7 @@ export default function ChatPanel({
   onGoal,
   plannerMessage,
   onMapCommand,
+  getAppState,
 }: ChatPanelProps) {
   const { t } = useI18n()
   const [tab, setTab]         = useState<ChatTab>('assistant')
@@ -158,7 +161,7 @@ export default function ChatPanel({
 
       {/* ── Assistant tab ─────────────────────────────────────────────── */}
       {tab === 'assistant' ? (
-        <AssistantPanel onMapCommand={onMapCommand} />
+        <AssistantPanel onMapCommand={onMapCommand} getAppState={getAppState} />
       ) : (
         /* ── Planner tab (unchanged behaviour) ─────────────────────────── */
         <>

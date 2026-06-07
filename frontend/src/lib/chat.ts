@@ -21,6 +21,20 @@ export interface ChatTurn {
   content: string
 }
 
+/**
+ * Snapshot of live app state sent with every chat turn so the model can
+ * resolve referents ("this district", "that layer", "what am I looking at?")
+ * without the user re-typing names.
+ *
+ * Mirrors backend/llm/schemas.py AppState — keep in sync.
+ */
+export interface AppState {
+  selected: { name: string; granularity: 'district' | 'neighbourhood' } | null
+  scenario: { id: string; target: string; label: string } | null
+  layers:   { id: string; label: string; metric: string; type: string; granularity: string; visible: boolean }[]
+  mapGranularity: 'district' | 'neighbourhood'
+}
+
 /** Map-control commands the assistant emits; the app applies them to MapView. */
 export type MapCommand =
   | { name: 'highlight_map'; input: { districts: string[]; color?: string; label?: string } }
@@ -99,17 +113,22 @@ function dispatch(evt: SseEvent, cb: ChatCallbacks): void {
  * Resolves when the stream ends (after onDone fires). Rejects on network /
  * non-200 errors before streaming begins; mid-stream errors arrive via onError.
  * Pass an AbortSignal to cancel an in-flight turn.
+ *
+ * `appState` is a live snapshot of the current map state (selected unit,
+ * active scenario, layer list, zoom granularity). The backend renders it into
+ * a system block so the model can resolve referents without re-typing names.
  */
 export async function streamChat(
   messages: ChatTurn[],
   locale: 'en' | 'yue',
+  appState: AppState,
   cb: ChatCallbacks,
   signal?: AbortSignal,
 ): Promise<void> {
   const res = await fetch(`${API_BASE}/api/chat`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, locale }),
+    body: JSON.stringify({ messages, locale, app_state: appState }),
     signal,
   })
 

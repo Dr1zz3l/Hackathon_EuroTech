@@ -154,6 +154,37 @@ class ExplainResponse(BaseModel):
 # /api/chat  (conversational assistant — streaming)
 # ---------------------------------------------------------------------------
 
+# ── App-state snapshot (optional, sent each turn) ────────────────────────────
+# These mirror the AppState TS interface in frontend/src/lib/chat.ts.
+# All fields are optional / have defaults so older clients still validate.
+
+class AppStateSelected(BaseModel):
+    name: str
+    granularity: Literal["district", "neighbourhood"] = "district"
+
+
+class AppStateScenario(BaseModel):
+    id: str
+    target: str
+    label: str
+
+
+class AppStateLayer(BaseModel):
+    id: str
+    label: str
+    metric: str
+    type: str
+    granularity: str
+    visible: bool
+
+
+class AppState(BaseModel):
+    selected:       AppStateSelected | None = None
+    scenario:       AppStateScenario | None = None
+    layers:         list[AppStateLayer]     = []
+    mapGranularity: Literal["district", "neighbourhood"] = "district"
+
+
 class ChatMessage(BaseModel):
     """One turn of conversation history. Content is plain text."""
     role: Literal["user", "assistant"]
@@ -166,8 +197,9 @@ class ChatRequest(BaseModel):
     user's new turn. The frontend persists only assistant *text*, so history
     never contains dangling tool_use blocks.
     """
-    messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
-    locale: Locale = "en"
+    messages:  list[ChatMessage] = Field(..., min_length=1, max_length=40)
+    locale:    Locale = "en"
+    app_state: AppState | None = None
 
 
 # ---------------------------------------------------------------------------
