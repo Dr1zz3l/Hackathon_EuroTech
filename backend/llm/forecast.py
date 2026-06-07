@@ -44,9 +44,11 @@ BAND = 0.008                     # Low/High band around the Expected rate
 VALUE_KIND = {
     "pop": "count", "density": "per_km2", "median_age": "years",
     "pct_over65": "percent", "area_km2": "km2",
-    "land.residential": "fraction", "land.industrial": "fraction",
-    "land.commercial": "fraction", "land.green": "fraction",
-    "land.educational": "fraction", "land.other": "fraction",
+    "land.residential":   "fraction", "land.industrial":    "fraction",
+    "land.commercial":    "fraction", "land.agricultural":  "fraction",
+    "land.recreational":  "fraction", "land.institutional": "fraction",
+    "land.misc":          "fraction", "land.infrastructure":"fraction",
+    "land.protected":     "fraction",
 }
 
 # Fitted-regressor cache: (granularity, target) -> (regressor, feats, names, model_name)
@@ -121,7 +123,7 @@ def _recommendations(row, target, year, traj_end, future, density_high) -> list[
     dpop = pop_h - pop0
     pct = (pop_h / pop0 - 1.0) if pop0 else 0.0
     res = float((row.get("land") or {}).get("residential", 0.0))
-    green = float((row.get("land") or {}).get("green", 0.0))
+    green = float((row.get("land") or {}).get("recreational", 0.0))
     dens0 = float(row.get("density") or 0)
     over65_0 = float(row.get("pct_over65") or 0)
     over65_h = future.get("pct_over65")
@@ -183,8 +185,8 @@ def _recommendations(row, target, year, traj_end, future, density_high) -> list[
             "severity": "info",
             "title": "Safeguard open space",
             "detail": (
-                f"Growth with limited green space ({green:.0%} today). Protect or add open "
-                f"space to keep the area liveable as it densifies."
+                f"Growth with limited recreational / open space ({green:.0%} today). Protect "
+                f"or add parks and open areas to keep the district liveable as it densifies."
             ),
         })
 

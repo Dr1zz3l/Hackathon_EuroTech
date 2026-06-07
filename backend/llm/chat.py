@@ -144,8 +144,9 @@ TOOLS: list[dict] = [
                     "description": (
                         "Metric to visualise. One of: pop, density, pct_over65, "
                         "median_age, area_km2, ageing_building_share (district "
-                        "level only), land.residential, land.industrial, "
-                        "land.commercial, land.green, land.educational, land.other."
+                        "level only), land.residential, land.industrial, land.commercial, "
+                        "land.agricultural, land.recreational, land.institutional, "
+                        "land.misc, land.infrastructure, land.protected."
                     ),
                 },
                 "granularity": {
@@ -218,7 +219,7 @@ TOOLS: list[dict] = [
             "properties": {
                 "metric": {
                     "type": "string",
-                    "description": "Metric to sort by. One of the valid metric keys (e.g. 'median_age', 'density', 'ageing_building_share', 'land.green'). Note: ageing_building_share exists only at district level.",
+                    "description": "Metric to sort by. One of the valid metric keys (e.g. 'median_age', 'density', 'ageing_building_share', 'land.recreational'). Note: ageing_building_share exists only at district level.",
                 },
                 "order": {
                     "type": "string",
@@ -292,8 +293,9 @@ TOOLS: list[dict] = [
                     "description": (
                         "Metric to predict. One of: pop, density, pct_over65, "
                         "median_age, area_km2, ageing_building_share (district "
-                        "level only), land.residential, land.industrial, "
-                        "land.commercial, land.green, land.educational, land.other."
+                        "level only), land.residential, land.industrial, land.commercial, "
+                        "land.agricultural, land.recreational, land.institutional, "
+                        "land.misc, land.infrastructure, land.protected."
                     ),
                 },
                 "granularity": {

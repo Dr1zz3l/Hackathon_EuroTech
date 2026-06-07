@@ -143,5 +143,29 @@
   "styling.palette.scenario": "可行性評分",
   "styling.palette.land.help": "按主要土地類別為每區上色。",
   "styling.palette.scenario.help": "按目前情境下的可行性為每區上色。",
-  "styling.reset": "回復預設"
+  "styling.reset": "回復預設",
+
+  "app.loading.map": "載入地圖中…",
+  "app.loading.districts": "載入分區中…",
+  "app.error.title": "錯誤 · 數據獲取",
+  "app.error.message": "無法載入分區數據。",
+
+  "scenario.header": "情境 · 選擇規劃目標",
+  "scenario.status.active": "情境已啟用",
+
+  "detail.profile": "分區概覽",
+  "detail.dominant": "主要",
+  "detail.land.estimated": "估算",
+  "detail.land.source_2024": "來源 2024",
+
+  "forecast.metric.pop": "人口",
+  "forecast.metric.median_age": "中位年齡",
+  "forecast.metric.pct_over65": "長者 %",
+  "forecast.metric.density": "密度",
+  "forecast.severity.critical": "嚴重",
+  "forecast.severity.warning": "警告",
+  "forecast.severity.info": "洞察",
+
+  "panel.weights": "權重",
+  "sidebar.layers.hidden": "已隱藏"
 }

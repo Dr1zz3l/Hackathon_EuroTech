@@ -72,14 +72,20 @@ SCALAR_METRICS = {
     "ageing_building_share": "Share of building stock considered ageing (0–1; proxy for redevelopment need)",
 }
 
-# Land-use fractions (0–1) nested under `land`. Addressable as e.g. "land.green".
+# Land-use fractions (0–1) nested under `land`. Addressable as e.g. "land.recreational".
+# Keys must mirror the actual GeoJSON `land` object exactly:
+#   6 reallocatable: residential, industrial, commercial, agricultural, recreational, institutional
+#   3 frozen: misc, infrastructure, protected
 LAND_METRICS = {
-    "land.residential": "Fraction of land that is residential",
-    "land.industrial":  "Fraction of land that is industrial",
-    "land.commercial":  "Fraction of land that is commercial",
-    "land.green":       "Fraction of land that is green / open space",
-    "land.educational": "Fraction of land that is educational",
-    "land.other":       "Fraction of land that is other (transport / water / barren)",
+    "land.residential":   "Fraction of land that is residential",
+    "land.industrial":    "Fraction of land that is industrial",
+    "land.commercial":    "Fraction of land that is commercial",
+    "land.agricultural":  "Fraction of land that is agricultural (farmland / fish ponds)",
+    "land.recreational":  "Fraction of land that is recreational / open / green space (parks, open areas)",
+    "land.institutional": "Fraction of land that is institutional / GIC (schools, hospitals, community facilities)",
+    "land.misc":          "Fraction of land that is miscellaneous (cemeteries / utilities)",
+    "land.infrastructure":"Fraction of land that is infrastructure (roads, railways)",
+    "land.protected":     "Fraction of land that is protected (country parks / nature reserves / wetlands)",
 }
 
 ALL_METRICS = {**SCALAR_METRICS, **LAND_METRICS}

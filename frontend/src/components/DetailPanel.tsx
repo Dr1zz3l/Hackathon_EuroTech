@@ -95,7 +95,7 @@ function DonutChart({ land }: { land: LandUse }) {
           {paths}
         </svg>
         <div className="absolute inset-0 flex flex-col items-center justify-center pointer-events-none">
-          <span className="eyebrow text-[9px]">Dominant</span>
+          <span className="eyebrow text-[9px]">{t('detail.dominant')}</span>
           <span className="text-[16px] font-semibold tracking-display-sm">
             {dominant ? Math.round(dominant.fraction * 100) : 0}%
           </span>
@@ -314,7 +314,7 @@ export default function DetailPanel({
             <span className="eyebrow">
               {scenario
                 ? `${t(scenario.label_key)} · ${scenario.horizon_year}`
-                : 'District profile'}
+                : t('detail.profile')}
             </span>
             <h2 className="display-lg truncate">{displayName}.</h2>
             {locale !== 'yue' && (
@@ -399,7 +399,7 @@ export default function DetailPanel({
                   ${district.land_source === 'estimated' ? 'bg-warning' : 'bg-link'}
                 `}
               />
-              {district.land_source === 'estimated' ? 'Estimated' : 'Source 2024'}
+              {district.land_source === 'estimated' ? t('detail.land.estimated') : t('detail.land.source_2024')}
             </span>
           </div>
           <DonutChart land={allocation ? allocation.future : district.land} />

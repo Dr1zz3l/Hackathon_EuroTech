@@ -36,18 +36,20 @@ interface ForecastPanelProps {
   requested?: { target?: string; horizon?: number; nonce?: number }
 }
 
-const METRICS: { key: string; label: string }[] = [
-  { key: 'pop',         label: 'Population' },
-  { key: 'median_age',  label: 'Median age' },
-  { key: 'pct_over65',  label: 'Elderly %' },
-  { key: 'density',     label: 'Density' },
+/** Metric keys with their i18n translation key. Labels resolved via t() inside the component. */
+const METRICS: { key: string; tKey: string }[] = [
+  { key: 'pop',         tKey: 'forecast.metric.pop' },
+  { key: 'median_age',  tKey: 'forecast.metric.median_age' },
+  { key: 'pct_over65',  tKey: 'forecast.metric.pct_over65' },
+  { key: 'density',     tKey: 'forecast.metric.density' },
 ]
 const HORIZONS = [5, 10, 15]
 
-const SEVERITY: Record<Severity, { color: string; label: string }> = {
-  critical: { color: '#ee0000', label: 'Critical' },
-  warning:  { color: '#f5a623', label: 'Warning' },
-  info:     { color: '#0070f3', label: 'Insight' },
+/** Severity level → accent colour. Label resolved via t(`forecast.severity.${level}`) inside the component. */
+const SEVERITY_COLOR: Record<Severity, string> = {
+  critical: '#ee0000',
+  warning:  '#f5a623',
+  info:     '#0070f3',
 }
 
 export default function ForecastPanel({ district, requested }: ForecastPanelProps) {
@@ -133,7 +135,7 @@ export default function ForecastPanel({ district, requested }: ForecastPanelProp
                   : 'bg-canvas-soft-2 text-mute hover:text-ink'}
               `}
             >
-              {m.label}
+              {t(m.tKey)}
             </button>
           ))}
         </div>
@@ -275,15 +277,15 @@ export default function ForecastPanel({ district, requested }: ForecastPanelProp
             <p className="eyebrow mb-2">{t('forecast.recs')}</p>
             <div className="space-y-2">
               {data.recommendations.map((r, i) => {
-                const s = SEVERITY[r.severity]
+                const color = SEVERITY_COLOR[r.severity]
                 return (
                   <div
                     key={i}
                     className="rounded-md p-2.5 pl-3"
-                    style={{ background: `${s.color}0f`, borderLeft: `2px solid ${s.color}` }}
+                    style={{ background: `${color}0f`, borderLeft: `2px solid ${color}` }}
                   >
                     <div className="flex items-center gap-1.5 mb-0.5">
-                      <span className="eyebrow text-[9px]" style={{ color: s.color }}>{s.label}</span>
+                      <span className="eyebrow text-[9px]" style={{ color }}>{t(`forecast.severity.${r.severity}`)}</span>
                     </div>
                     <p className="text-[12px] font-medium text-ink tracking-body-sm leading-snug mb-0.5">{r.title}</p>
                     <p className="text-[11.5px] text-body tracking-body-sm leading-relaxed">{r.detail}</p>

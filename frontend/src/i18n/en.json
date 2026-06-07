@@ -143,5 +143,29 @@
   "styling.palette.scenario": "Viability score",
   "styling.palette.land.help": "Each district coloured by its dominant land category.",
   "styling.palette.scenario.help": "Each district coloured by viability under the active scenario.",
-  "styling.reset": "Reset to default"
+  "styling.reset": "Reset to default",
+
+  "app.loading.map": "Loading map…",
+  "app.loading.districts": "Loading districts…",
+  "app.error.title": "Error · data fetch",
+  "app.error.message": "Failed to load district data.",
+
+  "scenario.header": "Scenario · choose a planning goal",
+  "scenario.status.active": "Scenario active",
+
+  "detail.profile": "District profile",
+  "detail.dominant": "Dominant",
+  "detail.land.estimated": "Estimated",
+  "detail.land.source_2024": "Source 2024",
+
+  "forecast.metric.pop": "Population",
+  "forecast.metric.median_age": "Median age",
+  "forecast.metric.pct_over65": "Elderly %",
+  "forecast.metric.density": "Density",
+  "forecast.severity.critical": "Critical",
+  "forecast.severity.warning": "Warning",
+  "forecast.severity.info": "Insight",
+
+  "panel.weights": "Weights",
+  "sidebar.layers.hidden": "Hidden"
 }

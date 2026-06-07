@@ -19,7 +19,7 @@ export default function DetailEmptyState() {
 
       <div className="relative flex-1 flex items-center justify-center p-8">
         <div className="text-center max-w-[220px]">
-          <p className="eyebrow mb-3">District profile</p>
+          <p className="eyebrow mb-3">{t('detail.profile')}</p>
           <h3 className="display-md mb-2">
             {t('panel.right.detail.empty.title')}
           </h3>

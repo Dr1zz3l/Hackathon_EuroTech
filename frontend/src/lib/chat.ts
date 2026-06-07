@@ -11,6 +11,9 @@
 
 const API_BASE = (process.env.NEXT_PUBLIC_API_BASE as string | undefined) ?? ''
 
+/** Abort the stream if no bytes arrive for this long (guards against hung backends). */
+const IDLE_TIMEOUT_MS = 30_000
+
 // ─── Public types ─────────────────────────────────────────────────────────────
 
 export interface ChatTurn {
@@ -118,25 +121,53 @@ export async function streamChat(
   const decoder = new TextDecoder()
   let buffer = ''
 
-  while (true) {
-    const { done, value } = await reader.read()
-    if (done) break
-    buffer += decoder.decode(value, { stream: true })
+  // ── Idle timeout ──────────────────────────────────────────────────────────
+  // If the backend goes silent for IDLE_TIMEOUT_MS we cancel the reader so the
+  // stream doesn't hang the UI until the tab is closed. The timer is reset on
+  // every chunk; cancelling the reader causes reader.read() to resolve with
+  // done:true so the loop exits cleanly, then we fire onError.
+  let idleTimedOut = false
+  let idleTimer: ReturnType<typeof setTimeout> | undefined
 
-    // SSE frames are separated by a blank line.
-    const frames = buffer.split('\n\n')
-    buffer = frames.pop() ?? ''
+  const armIdle = () => {
+    clearTimeout(idleTimer)
+    idleTimer = setTimeout(() => {
+      idleTimedOut = true
+      reader.cancel('Idle timeout — no data from backend for 30 s')
+    }, IDLE_TIMEOUT_MS)
+  }
 
-    for (const frame of frames) {
-      const line = frame.trim()
-      if (!line.startsWith('data:')) continue
-      const payload = line.slice(5).trim()
-      if (!payload) continue
-      try {
-        dispatch(JSON.parse(payload) as SseEvent, cb)
-      } catch {
-        // Ignore malformed frame — keep the stream alive.
+  // If the caller cancels (e.g. component unmount), clear our internal timer.
+  signal?.addEventListener('abort', () => clearTimeout(idleTimer), { once: true })
+
+  armIdle()
+  try {
+    while (true) {
+      const { done, value } = await reader.read()
+      if (done) break
+      armIdle()  // got data — reset the idle clock
+      buffer += decoder.decode(value, { stream: true })
+
+      // SSE frames are separated by a blank line.
+      const frames = buffer.split('\n\n')
+      buffer = frames.pop() ?? ''
+
+      for (const frame of frames) {
+        const line = frame.trim()
+        if (!line.startsWith('data:')) continue
+        const payload = line.slice(5).trim()
+        if (!payload) continue
+        try {
+          dispatch(JSON.parse(payload) as SseEvent, cb)
+        } catch {
+          // Ignore malformed frame — keep the stream alive.
+        }
       }
+    }
+  } finally {
+    clearTimeout(idleTimer)
+    if (idleTimedOut) {
+      cb.onError?.('The backend stopped responding. Is the server running?')
     }
   }
 }

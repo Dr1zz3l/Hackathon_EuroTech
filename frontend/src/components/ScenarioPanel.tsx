@@ -26,7 +26,7 @@ export default function ScenarioPanel({ activeScenario, onSelect }: ScenarioPane
 
         {/* Mono eyebrow on the left — the "technical layer" voice */}
         <span className="eyebrow hidden md:inline shrink-0">
-          Scenario · choose a planning goal
+          {t('scenario.header')}
         </span>
 
         {/* Centered pill row */}
@@ -91,7 +91,7 @@ export default function ScenarioPanel({ activeScenario, onSelect }: ScenarioPane
                 ${activeScenario ? 'bg-link' : 'bg-hairline-strong'}
               `}
             />
-            {activeScenario ? 'Scenario active' : 'Default view'}
+            {activeScenario ? t('scenario.status.active') : t('scenario.none.label')}
           </span>
         </div>
       </div>

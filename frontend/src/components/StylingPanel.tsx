@@ -88,7 +88,7 @@ export default function StylingPanel({
                       ${isActive ? 'text-canvas-soft-2' : 'text-mute'}
                     `}
                   >
-                    Hidden
+                    {t('sidebar.layers.hidden')}
                   </span>
                 )}
               </button>

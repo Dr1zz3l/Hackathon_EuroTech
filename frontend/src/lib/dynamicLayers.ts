@@ -22,7 +22,7 @@ export interface DynamicLayer {
   /** Stable unique id (App-assigned). */
   id: string
   type: DynamicLayerType
-  /** A metric key from METRICS (e.g. 'density', 'pct_over65', 'land.green'). */
+  /** A metric key from METRICS (e.g. 'density', 'pct_over65', 'land.recreational'). */
   metric: string
   granularity: DynGranularity
   /** Human label for the layer row + legend. */
@@ -61,12 +61,15 @@ const METRICS: Record<string, MetricMeta> = {
   median_age:            { label: 'Median age',           kind: 'age' },
   area_km2:              { label: 'Area',                 kind: 'area' },
   ageing_building_share: { label: 'Ageing building share', kind: 'fraction', districtOnly: true },
-  'land.residential':    { label: 'Residential land',     kind: 'fraction' },
-  'land.industrial':     { label: 'Industrial land',      kind: 'fraction' },
-  'land.commercial':     { label: 'Commercial land',      kind: 'fraction' },
-  'land.green':          { label: 'Green / open space',   kind: 'fraction' },
-  'land.educational':    { label: 'Educational land',     kind: 'fraction' },
-  'land.other':          { label: 'Other land',           kind: 'fraction' },
+  'land.residential':    { label: 'Residential land',                       kind: 'fraction' },
+  'land.industrial':     { label: 'Industrial land',                         kind: 'fraction' },
+  'land.commercial':     { label: 'Commercial land',                         kind: 'fraction' },
+  'land.agricultural':   { label: 'Agricultural land (farmland/fish ponds)', kind: 'fraction' },
+  'land.recreational':   { label: 'Recreational / open / green space',       kind: 'fraction' },
+  'land.institutional':  { label: 'Institutional land (GIC)',                kind: 'fraction' },
+  'land.misc':           { label: 'Miscellaneous land',                      kind: 'fraction' },
+  'land.infrastructure': { label: 'Infrastructure',                          kind: 'fraction' },
+  'land.protected':      { label: 'Protected land (country parks)',          kind: 'fraction' },
 }
 
 export const VALID_METRICS = Object.keys(METRICS)
@@ -79,7 +82,7 @@ export function metricLabel(metric: string): string {
   return METRICS[metric]?.label ?? metric
 }
 
-/** Resolve a metric path ('density' or 'land.green') to a number, or null. */
+/** Resolve a metric path ('density' or 'land.recreational') to a number, or null. */
 export function metricValue(props: District, metric: string): number | null {
   let val: unknown
   if (metric.startsWith('land.')) {

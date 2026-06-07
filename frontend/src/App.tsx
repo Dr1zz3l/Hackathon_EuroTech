@@ -518,8 +518,8 @@ function AppInner() {
     return (
       <div className="w-full h-full flex items-center justify-center bg-canvas-soft p-8">
         <div className="max-w-md text-center bg-canvas rounded-lg p-8 shadow-card-lg">
-          <p className="eyebrow text-error mb-3">Error · data fetch</p>
-          <p className="display-md mb-2">Failed to load district data.</p>
+          <p className="eyebrow text-error mb-3">{t('app.error.title')}</p>
+          <p className="display-md mb-2">{t('app.error.message')}</p>
           <p className="text-sm text-mute font-mono">{loadError}</p>
         </div>
       </div>
@@ -530,7 +530,7 @@ function AppInner() {
   if (!geojson || !scorer) {
     return (
       <div className="w-full h-full flex items-center justify-center bg-canvas-soft">
-        <span className="eyebrow">Loading districts…</span>
+        <span className="eyebrow">{t('app.loading.districts')}</span>
       </div>
     )
   }
@@ -550,8 +550,8 @@ function AppInner() {
             }}
           />
           <div className="flex flex-col leading-tight">
-            <span className="eyebrow">HK · Smart City · 18 Districts</span>
-            <span className="display-sm">Hong Kong District Viability.</span>
+            <span className="eyebrow">{t('app.subtitle')}</span>
+            <span className="display-sm">{t('app.title')}</span>
           </div>
         </div>
 

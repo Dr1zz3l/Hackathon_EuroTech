@@ -183,7 +183,7 @@ export default function ChatPanel({
                   const total = mainKeys.reduce((s, k) => s + (w[k] ?? 0), 0)
                   return (
                     <div>
-                      <p className="eyebrow mb-1.5">Weights</p>
+                      <p className="eyebrow mb-1.5">{t('panel.weights')}</p>
                       <div className="flex items-center gap-1 flex-wrap">
                         {mainKeys.map(k => {
                           const raw = w[k] ?? 0
