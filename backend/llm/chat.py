@@ -42,8 +42,10 @@ from .data import (
     query_district,
     rank_districts,
 )
+from .forecast import run_forecast
 from .predict import tabpfn_predict
 from .schemas import ChatRequest
+from .social import AUDIENCE_SUBREDDITS, fetch_social_digest
 
 logger = logging.getLogger(__name__)
 
@@ -313,6 +315,93 @@ TOOLS: list[dict] = [
             "required": ["target"],
         },
     },
+    {
+        "name": "social_listening",
+        "description": (
+            "Pull recent real opinions from Reddit to gauge how a SECTOR is "
+            "perceived — and how it could be improved — for a given audience. "
+            "Use this for any 'what do people think', 'sentiment', 'reviews', "
+            "'how can we improve X for tourists/expats/talent', 'what's good / "
+            "bad about Y' question. It searches a curated set of subreddits "
+            "(chosen by audience), returns posts + top comments with permalinks. "
+            "From that digest YOU produce: a 0–100 score, what's already good, "
+            "what to improve, and numbered actionable steps — each grounded in "
+            "the posts. This is perceived sentiment, NOT official data; say so. "
+            "If it returns an 'error' field, relay the hint to the user."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "topic": {
+                    "type": "string",
+                    "description": (
+                        "The sector / theme to listen on, e.g. 'transport', "
+                        "'housing rent', 'nightlife', 'safety', 'visa immigration', "
+                        "'English friendliness', 'job market', 'healthcare'."
+                    ),
+                },
+                "audience": {
+                    "type": "string",
+                    "enum": ["tourist", "talent", "citizen", "any"],
+                    "description": (
+                        "Whose perspective: 'tourist' (visitors), 'talent' "
+                        "(expats / foreign professionals relocating), 'citizen' "
+                        "(residents), or 'any'. Picks which subreddits to search."
+                    ),
+                },
+                "area": {
+                    "type": "string",
+                    "description": (
+                        "Optional Hong Kong district or neighbourhood to focus on "
+                        "(e.g. 'Sham Shui Po'). Omit for territory-wide sentiment."
+                    ),
+                },
+            },
+            "required": ["topic"],
+        },
+    },
+    {
+        "name": "show_forecast",
+        "description": (
+            "Project ONE area's metric over MULTIPLE YEARS and open the Forecast "
+            "panel (a chart with Low/Expected/High trajectory, TabPFN-predicted "
+            "future indicators, and planning recommendations/warnings). Use this "
+            "for multi-year / over-time questions about a SPECIFIC district or "
+            "neighbourhood — e.g. 'population of Sha Tin in the next 10 years', "
+            "'how will Kwun Tong change by 2035', 'forecast the elderly share of "
+            "this area'. It returns the projected numbers and recommendations for "
+            "you to summarise in chat (and the panel shows the chart). "
+            "Use `tabpfn_predict` instead for present-day estimates or anomalies "
+            "across many areas. The projection is a scenario estimate from the "
+            "2021 snapshot, not a measured trend — say so."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {
+                "unit": {
+                    "type": "string",
+                    "description": "Exact district or neighbourhood name to forecast.",
+                },
+                "granularity": {
+                    "type": "string",
+                    "enum": ["district", "neighbourhood"],
+                    "description": "'district' (default) or 'neighbourhood'.",
+                },
+                "target": {
+                    "type": "string",
+                    "description": (
+                        "Metric to project: pop (default), median_age, pct_over65, "
+                        "density, or a land.* share."
+                    ),
+                },
+                "horizon_years": {
+                    "type": "integer",
+                    "description": "Years ahead to project (default 10; 1–30).",
+                },
+            },
+            "required": ["unit"],
+        },
+    },
 ]
 
 
@@ -324,6 +413,7 @@ def _system_prompt(locale: str) -> str:
     lang = "Traditional Chinese (繁體中文)" if locale == "yue" else "English"
     names = ", ".join(DISTRICT_NAMES)
     n_nbhd = len(NEIGHBOURHOODS)
+    audiences = ", ".join(AUDIENCE_SUBREDDITS.keys())
     return f"""\
 You are the map assistant for an interactive Hong Kong urban-planning tool. \
 You help city planners explore the 18 districts of Hong Kong, answer questions \
@@ -369,6 +459,36 @@ temporal forecasts. For population-GROWTH questions, state this caveat, then \
 predict the age structure (median_age / pct_over65) as a renewal/growth proxy, \
 or use the what-if mode to show sensitivity. After predicting, highlight the \
 notable areas with highlight_map so the user can see them.
+
+## Multi-year forecasts (Forecast panel)
+For a projection of ONE specific area over several years — e.g. "population of \
+Sha Tin in the next 10 years", "how will Kwun Tong change by 2035", "forecast \
+this neighbourhood's elderly share" — call `show_forecast` with the area, a \
+target metric (default pop) and a horizon. It opens the Forecast panel (a chart \
+with Low/Expected/High bands plus recommendations) AND returns the projected \
+numbers; summarise them in chat — the headline change, and the key warning (e.g. \
+housing supply) if one is flagged. It is a scenario estimate from the 2021 \
+snapshot, not a measured trend — say so briefly. Use `tabpfn_predict` (not this) \
+for present-day cross-sectional estimates or anomalies across many areas.
+
+## Social listening (Reddit sentiment)
+Call `social_listening` when the user asks how something is *perceived* or how a \
+sector could be *improved* for a group — e.g. "how can transport be better for \
+tourists?", "what do expats think about housing here?", "what's good and bad \
+about nightlife in Wan Chai?". Pick the audience ({audiences}); pass an `area` \
+only if the question is about a specific district. The tool returns real Reddit \
+posts + top comments with permalinks; from that digest YOU build the answer:
+- **Score: NN/100** for the (sector, audience) — higher = better sentiment. \
+Base it on the balance of positive vs negative posts, weighted by upvotes; if \
+evidence is thin, say "low confidence" and don't over-claim.
+- **What's already good** — 2–4 short points drawn from positive posts.
+- **What to improve** — 2–4 short points drawn from complaints.
+- **Actionable steps** — a numbered list (2–4) of concrete moves a city/agency \
+could take, each tied to the pain points above. End by telling the user they can \
+ask you to expand any step into detail.
+- Attribute lightly (e.g. "several r/HongKong posts mention…") and state once \
+that this is perceived sentiment from Reddit, not official data. If the tool \
+returns an `error`, relay its `hint` and suggest the user add Reddit credentials.
 
 ## Data you can rely on
 Each unit has exactly these fields — never invent others:
@@ -428,6 +548,20 @@ def _execute_server_tool(name: str, tool_input: dict) -> dict:
                 units=list(units) if isinstance(units, list) else None,
                 whatif=dict(whatif) if isinstance(whatif, dict) else None,
             )
+        if name == "social_listening":
+            area = tool_input.get("area")
+            return fetch_social_digest(
+                topic=str(tool_input.get("topic", "")),
+                audience=str(tool_input.get("audience", "any")),
+                area=str(area) if area else None,
+            )
+        if name == "show_forecast":
+            return run_forecast(
+                unit=str(tool_input.get("unit", "")),
+                granularity=str(tool_input.get("granularity", "district")),
+                target=str(tool_input.get("target", "pop")),
+                horizon_years=int(tool_input.get("horizon_years", 10)),
+            )
     except Exception as exc:  # noqa: BLE001 — tool errors must not crash the stream
         logger.exception("Tool %s failed", name)
         return {"error": f"Tool execution failed: {exc}"}
@@ -480,13 +614,23 @@ async def _event_stream(req: ChatRequest):
                     result: dict = {"ok": True, "executed_on": "client"}
                 else:
                     yield _sse({"type": "tool", "name": tu.name, "status": "running"})
-                    # TabPFN inference is CPU-bound (torch) — run it off the event
-                    # loop so streaming for other clients isn't blocked.
-                    if tu.name == "tabpfn_predict":
+                    # TabPFN inference is CPU-bound (torch); social_listening does
+                    # blocking network I/O; forecast runs TabPFN — run them off the
+                    # event loop so streaming for other clients isn't blocked.
+                    if tu.name in ("tabpfn_predict", "social_listening", "show_forecast"):
                         result = await asyncio.to_thread(_execute_server_tool, tu.name, tool_input)
                     else:
                         result = _execute_server_tool(tu.name, tool_input)
                     yield _sse({"type": "tool", "name": tu.name, "status": "done"})
+                    # show_forecast is server-executed (so the model can narrate the
+                    # numbers) AND opens the Forecast panel on the client.
+                    if tu.name == "show_forecast" and "error" not in result:
+                        yield _sse({"type": "map_command", "name": "show_forecast", "input": {
+                            "unit": result.get("unit", tool_input.get("unit", "")),
+                            "granularity": result.get("granularity", "district"),
+                            "target": result.get("target", "pop"),
+                            "horizon_years": result.get("horizon_years", 10),
+                        }})
 
                 tool_results.append({
                     "type": "tool_result",

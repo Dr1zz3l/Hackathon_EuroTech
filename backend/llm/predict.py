@@ -261,12 +261,16 @@ def tabpfn_predict(
     for fold in folds:
         if len(fold) == 0:
             continue
+        # Sort the held-out indices so they line up with boolean-mask row order:
+        # X[test_mask] yields rows in ascending index order, so predictions must
+        # be written back to those same sorted indices (not the shuffled `fold`).
+        test_idx = np.sort(fold)
         test_mask = np.zeros(n, dtype=bool)
-        test_mask[fold] = True
+        test_mask[test_idx] = True
         if (~test_mask).sum() < MIN_TRAIN_ROWS:
             continue
         reg.fit(X[~test_mask], y[~test_mask])
-        oos[fold] = reg.predict(X[test_mask])
+        oos[test_idx] = reg.predict(X[test_mask])
 
     valid = ~np.isnan(oos)
     resid = y[valid] - oos[valid]

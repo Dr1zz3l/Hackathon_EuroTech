@@ -15,6 +15,7 @@ deployments where frontend and backend are on different origins.
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import os
 
@@ -25,12 +26,14 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from .chat import router as chat_router
 from .client import get_client
+from .forecast import run_forecast
 from .prompts import (
     EXPLAIN_SYSTEM, PARSE_SYSTEM, PARSE_TOOL, SUMMARIZE_SYSTEM,
     _locale_desc, build_explain_user_prompt, build_summarize_user_prompt,
 )
 from .schemas import (
     DonorWeights, ExplainRequest, ExplainResponse,
+    ForecastRequest,
     ParseGoalRequest, ParseGoalResponse,
     SummarizePlanRequest, SummarizePlanResponse,
     WeightOverrides,
@@ -62,6 +65,24 @@ MODEL = "claude-haiku-4-5"
 
 # Conversational assistant (streaming /api/chat) — see backend/llm/chat.py
 app.include_router(chat_router)
+
+
+# ---------------------------------------------------------------------------
+# POST /api/forecast — TabPFN-assisted scenario projection for one area
+# ---------------------------------------------------------------------------
+
+@app.post("/api/forecast")
+async def forecast(req: ForecastRequest) -> dict:
+    """
+    Project a metric for one district/neighbourhood over a horizon, with
+    Low/Expected/High trajectory, TabPFN future indicators, housing-derived
+    numbers and rules-based recommendations. Runs off the event loop (TabPFN
+    is CPU-bound). See backend/llm/forecast.run_forecast.
+    """
+    return await asyncio.to_thread(
+        run_forecast,
+        req.unit, req.granularity, req.target, req.horizon_years,
+    )
 
 
 # ---------------------------------------------------------------------------

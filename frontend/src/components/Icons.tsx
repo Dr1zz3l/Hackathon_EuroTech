@@ -67,6 +67,18 @@ export const ZoomFitIcon = (p: IconProps) => (
   </svg>
 )
 
+// Six-dot drag handle for reordering rows.
+export const GripIcon = (p: IconProps) => (
+  <svg {...svgProps(p)} fill="currentColor" stroke="none">
+    <circle cx="9" cy="6" r="1.4" />
+    <circle cx="15" cy="6" r="1.4" />
+    <circle cx="9" cy="12" r="1.4" />
+    <circle cx="15" cy="12" r="1.4" />
+    <circle cx="9" cy="18" r="1.4" />
+    <circle cx="15" cy="18" r="1.4" />
+  </svg>
+)
+
 export const EyeIcon = (p: IconProps) => (
   <svg {...svgProps(p)}>
     <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />

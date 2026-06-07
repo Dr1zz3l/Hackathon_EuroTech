@@ -32,6 +32,7 @@ import {
   DownloadIcon,
   BoltIcon,
   TrashIcon,
+  GripIcon,
 } from './Icons'
 
 // ─── Layer model — local to LayersPanel/App ────────────────────────────────
@@ -80,6 +81,18 @@ interface LayersPanelProps {
   onDownload: (id: string) => void
   /** Remove an agent-created layer (only called for layers with remove capability). */
   onDelete?: (id: string) => void
+  /** Reorder the stack: move `draggedId` to just before/after `targetId`. */
+  onReorder?: (draggedId: string, targetId: string, place: 'before' | 'after') => void
+}
+
+/** Transient drag state shared from the panel root to each row. */
+interface DragState {
+  dragId: string | null
+  hint: { id: string; place: 'before' | 'after' } | null
+  onStart: (id: string) => void
+  onOver: (id: string, place: 'before' | 'after') => void
+  onDrop: (id: string) => void
+  onEnd: () => void
 }
 
 // ─── Swatch preview — shows the layer's palette at a glance ────────────────
@@ -266,6 +279,7 @@ function KebabMenu({
 function LayerRow({
   layer,
   activeLevel,
+  drag,
   onSetVisible,
   onZoomTo,
   onOpenStyle,
@@ -274,9 +288,13 @@ function LayerRow({
 }: {
   layer: AppLayer
   activeLevel: LayersPanelProps['activeLevel']
+  drag?: DragState
 } & Pick<LayersPanelProps, 'onSetVisible' | 'onZoomTo' | 'onOpenStyle' | 'onDownload' | 'onDelete'>) {
   const { t } = useI18n()
   const [menuOpen, setMenuOpen] = useState(false)
+  const draggable = !!drag
+  const isDragging = drag?.dragId === layer.id
+  const hint = drag && drag.hint?.id === layer.id ? drag.hint.place : null
 
   const hidden = !layer.visible
   // Zoom-inactive: this layer represents a granularity the map isn't showing.
@@ -293,13 +311,47 @@ function LayerRow({
 
   return (
     <div
+      draggable={draggable}
+      onDragStart={draggable ? (e) => {
+        e.dataTransfer.effectAllowed = 'move'
+        e.dataTransfer.setData('text/plain', layer.id)
+        drag!.onStart(layer.id)
+      } : undefined}
+      onDragEnd={draggable ? () => drag!.onEnd() : undefined}
+      onDragOver={draggable ? (e) => {
+        if (!drag!.dragId || drag!.dragId === layer.id) return
+        e.preventDefault()
+        e.dataTransfer.dropEffect = 'move'
+        const r = e.currentTarget.getBoundingClientRect()
+        drag!.onOver(layer.id, e.clientY - r.top < r.height / 2 ? 'before' : 'after')
+      } : undefined}
+      onDrop={draggable ? (e) => { e.preventDefault(); drag!.onDrop(layer.id) } : undefined}
       className={`
         group relative
         flex items-center gap-2 px-2 py-2 rounded-md
         hover:bg-canvas-soft transition-colors
         ${dimmed ? 'opacity-50' : ''}
+        ${isDragging ? 'opacity-40' : ''}
       `}
     >
+      {/* Drop indicator */}
+      {hint && (
+        <div
+          className={`absolute left-2 right-2 h-0.5 bg-link rounded-full z-10 ${hint === 'before' ? 'top-0' : 'bottom-0'}`}
+        />
+      )}
+
+      {/* Drag handle */}
+      {draggable && (
+        <span
+          className="shrink-0 -ml-1 text-mute/30 group-hover:text-mute cursor-grab active:cursor-grabbing transition-colors"
+          title={t('sidebar.layers.action.reorder')}
+          aria-hidden
+        >
+          <GripIcon size={13} />
+        </span>
+      )}
+
       <LayerSwatch kind={layer.swatch} visible={layer.visible && !inactive} style={layer.swatchStyle} />
 
       <div className="flex-1 min-w-0">
@@ -398,8 +450,29 @@ export default function LayersPanel({
   onOpenStyle,
   onDownload,
   onDelete,
+  onReorder,
 }: LayersPanelProps) {
   const { t } = useI18n()
+
+  // ── Drag-and-drop reorder state ──────────────────────────────────────────
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [hint, setHint] = useState<{ id: string; place: 'before' | 'after' } | null>(null)
+
+  const drag: DragState | undefined = onReorder
+    ? {
+        dragId,
+        hint,
+        onStart: (id) => setDragId(id),
+        onOver: (id, place) =>
+          setHint(h => (h && h.id === id && h.place === place ? h : { id, place })),
+        onDrop: (id) => {
+          if (dragId && dragId !== id && hint) onReorder(dragId, id, hint.place)
+          setDragId(null)
+          setHint(null)
+        },
+        onEnd: () => { setDragId(null); setHint(null) },
+      }
+    : undefined
 
   if (!open) {
     return (
@@ -482,6 +555,7 @@ export default function LayersPanel({
             key={layer.id}
             layer={layer}
             activeLevel={activeLevel}
+            drag={drag}
             onSetVisible={onSetVisible}
             onZoomTo={onZoomTo}
             onOpenStyle={onOpenStyle}

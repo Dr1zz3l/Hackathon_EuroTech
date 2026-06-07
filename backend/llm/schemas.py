@@ -161,3 +161,16 @@ class ChatRequest(BaseModel):
     """
     messages: list[ChatMessage] = Field(..., min_length=1, max_length=40)
     locale: Locale = "en"
+
+
+# ---------------------------------------------------------------------------
+# /api/forecast  (TabPFN-assisted scenario projection)
+# ---------------------------------------------------------------------------
+
+class ForecastRequest(BaseModel):
+    """Project one metric for one area over a horizon. Response is a plain dict
+    (see backend/llm/forecast.run_forecast)."""
+    unit: str = Field(..., min_length=1, max_length=120)
+    granularity: Literal["district", "neighbourhood"] = "district"
+    target: str = "pop"
+    horizon_years: int = Field(10, ge=1, le=30)

@@ -56,6 +56,7 @@ import MapLegend from './components/MapLegend'
 import LanguageToggle from './components/LanguageToggle'
 import LayersPanel, { type AppLayer } from './components/LayersPanel'
 import StylingPanel, { type PaletteMode } from './components/StylingPanel'
+import ForecastPanel from './components/ForecastPanel'
 import { ChevronLeftIcon, ChevronRightIcon, SlidersIcon, LayersIcon } from './components/Icons'
 import type { MapApi } from './components/MapView'
 
@@ -114,7 +115,7 @@ const DEFAULT_LAYERS: AppLayer[] = [
 ]
 
 // ── Right panel tabs ─────────────────────────────────────────────────────────
-type RightTab = 'detail' | 'style'
+type RightTab = 'detail' | 'forecast' | 'style'
 
 // Loose name normaliser — must match MapView.normName so assistant-supplied
 // names (districts or coded STPU names like "Kwun Tong · 294") resolve to cells.
@@ -188,6 +189,8 @@ function AppInner() {
   const [layersOpen, setLayersOpen] = useState(true)
   const [rightOpen,  setRightOpen]  = useState(true)
   const [rightTab,   setRightTab]   = useState<RightTab>('detail')
+  // Agent-driven forecast request (target/horizon) — bumped nonce re-triggers it.
+  const [forecastReq, setForecastReq] = useState<{ target?: string; horizon?: number; nonce: number } | undefined>(undefined)
 
   // ── Layer state ──────────────────────────────────────────────────────────────
   const [layers,        setLayers]        = useState<AppLayer[]>(DEFAULT_LAYERS)
@@ -196,6 +199,9 @@ function AppInner() {
   // Agent-created analytical overlays (heatmap / choropleth / bubble).
   const [dynamicLayers, setDynamicLayers] = useState<DynamicLayer[]>([])
   const dynIdRef = useRef(0)
+  // Unified top-to-bottom ordering of every layer row (base + dynamic). New
+  // dynamic layers are inserted at the top; drag-and-drop reorders this list.
+  const [layerOrder, setLayerOrder] = useState<string[]>(() => DEFAULT_LAYERS.map(l => l.id))
   // Which granularity the map is currently showing (zoom-driven). Drives the
   // Layers sidebar's active/greyed state.
   const [activeLevel,   setActiveLevel]   = useState<'district' | 'neighbourhood'>('district')
@@ -351,7 +357,22 @@ function AppInner() {
   }, [])
 
   const deleteLayer = useCallback((id: string) => {
-    if (isDynId(id)) setDynamicLayers(prev => prev.filter(l => l.id !== id))
+    if (isDynId(id)) {
+      setDynamicLayers(prev => prev.filter(l => l.id !== id))
+      setLayerOrder(prev => prev.filter(x => x !== id))
+    }
+  }, [])
+
+  // Drag-and-drop: move `draggedId` to just before/after `targetId`.
+  const reorderLayers = useCallback((draggedId: string, targetId: string, place: 'before' | 'after') => {
+    if (draggedId === targetId) return
+    setLayerOrder(prev => {
+      const without = prev.filter(x => x !== draggedId)
+      const idx = without.indexOf(targetId)
+      if (idx === -1) return prev
+      without.splice(place === 'before' ? idx : idx + 1, 0, draggedId)
+      return without
+    })
   }, [])
 
   const zoomToLayer = useCallback((id: string) => {
@@ -383,7 +404,9 @@ function AppInner() {
           null
         if (cell) {
           setSelectedDistrict(cell)
-          setRightTab('detail')
+          // Don't yank away from an active Forecast view (show_forecast often
+          // also highlights the same cell); otherwise surface the Detail tab.
+          setRightTab(prev => (prev === 'forecast' ? prev : 'detail'))
           setRightOpen(true)
         }
       }
@@ -394,18 +417,40 @@ function AppInner() {
       const { layer } = validateAddLayer(cmd.input, id, nbhdGeojson != null)
       if (layer) {
         setDynamicLayers(prev => [...prev, layer])
-        setLayersOpen(true)   // reveal the stack so the new layer is visible
+        setLayerOrder(prev => [id, ...prev])   // new layers go to the top
+        setLayersOpen(true)                    // reveal the stack
+      }
+    } else if (cmd.name === 'show_forecast') {
+      // Resolve the area, select it, and open the Forecast tab with the params.
+      const target = cmd.input.unit ? normCellName(cmd.input.unit) : ''
+      const cell = target
+        ? (districts.find(d => normCellName(d.name) === target) ??
+           nbhds.find(d => normCellName(d.name) === target) ?? null)
+        : null
+      if (cell) {
+        setSelectedDistrict(cell)
+        setForecastReq({
+          target: cmd.input.target,
+          horizon: cmd.input.horizon_years,
+          nonce: Date.now(),
+        })
+        setRightTab('forecast')
+        setRightOpen(true)
       }
     } else if (cmd.name === 'remove_layer') {
       const { id, label, all } = cmd.input
+      // Compute the surviving dynamic layers, then prune layerOrder to match.
       setDynamicLayers(prev => {
-        if (all) return []
-        if (id) return prev.filter(l => l.id !== id)
-        if (label) {
+        let kept = prev
+        if (all || (!id && !label)) kept = []
+        else if (id) kept = prev.filter(l => l.id !== id)
+        else if (label) {
           const target = label.trim().toLowerCase()
-          return prev.filter(l => l.label.trim().toLowerCase() !== target)
+          kept = prev.filter(l => l.label.trim().toLowerCase() !== target)
         }
-        return []   // no selector → clear all
+        const keptIds = new Set(kept.map(l => l.id))
+        setLayerOrder(order => order.filter(x => !isDynId(x) || keptIds.has(x)))
+        return kept
       })
     }
   }, [districts, nbhds, nbhdGeojson])
@@ -452,11 +497,21 @@ function AppInner() {
   const neighbourhoodLayer = layers.find(l => l.id === 'neighbourhoods')!
   const basemapLayer       = layers.find(l => l.id === 'basemap')!
 
-  // Base layers + agent-created overlays, for the Layers panel stack.
-  const panelLayers = useMemo<AppLayer[]>(
-    () => [...layers, ...dynamicLayers.map(dynamicToAppLayer)],
-    [layers, dynamicLayers],
-  )
+  // Resolve the unified `layerOrder` (top→bottom) into concrete rows for the
+  // panel, and into the dynamic-overlay list (top→bottom) the map stacks.
+  const { panelLayers, orderedDynamicLayers } = useMemo(() => {
+    const baseById = new Map(layers.map(l => [l.id, l]))
+    const dynById = new Map(dynamicLayers.map(d => [d.id, d]))
+    const rows: AppLayer[] = []
+    const dyn: DynamicLayer[] = []
+    for (const id of layerOrder) {
+      const base = baseById.get(id)
+      if (base) { rows.push(base); continue }
+      const d = dynById.get(id)
+      if (d) { rows.push(dynamicToAppLayer(d)); dyn.push(d) }
+    }
+    return { panelLayers: rows, orderedDynamicLayers: dyn }
+  }, [layerOrder, layers, dynamicLayers])
 
   // ── Error state ───────────────────────────────────────────────────────────────
   if (loadError) {
@@ -534,6 +589,7 @@ function AppInner() {
           onOpenStyle={openStyleForLayer}
           onDownload={downloadLayer}
           onDelete={deleteLayer}
+          onReorder={reorderLayers}
         />
 
         {/* Map area */}
@@ -558,7 +614,7 @@ function AppInner() {
             nbhdGeojson={nbhdGeojson}
             nbhdScorer={nbhdScorer}
             nbhdAllocationResult={nbhdAllocationResult}
-            dynamicLayers={dynamicLayers}
+            dynamicLayers={orderedDynamicLayers}
           />
           <MapLegend
             activeScenario={activeScenario}
@@ -614,6 +670,24 @@ function AppInner() {
                   {t('panel.right.tab.detail')}
                 </button>
                 <button
+                  onClick={() => setRightTab('forecast')}
+                  className={`
+                    h-7 px-3 rounded-full
+                    text-[12px] font-medium tracking-body-sm
+                    inline-flex items-center gap-1.5
+                    transition-colors
+                    ${rightTab === 'forecast'
+                      ? 'bg-canvas text-ink shadow-hairline-inset'
+                      : 'text-mute hover:text-ink'}
+                  `}
+                >
+                  <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+                    <path d="M1.5 9.5L5 6l2.5 2.5L12.5 3.5" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                    <path d="M9.5 3.5h3v3" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                  {t('panel.right.tab.forecast')}
+                </button>
+                <button
                   onClick={() => setRightTab('style')}
                   className={`
                     h-7 px-3 rounded-full
@@ -665,6 +739,8 @@ function AppInner() {
                 ) : (
                   <DetailEmptyState />
                 )
+              ) : rightTab === 'forecast' ? (
+                <ForecastPanel district={selectedDistrict} requested={forecastReq} />
               ) : (
                 <StylingPanel
                   layers={layers}

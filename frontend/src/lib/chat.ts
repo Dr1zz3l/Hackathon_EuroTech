@@ -33,9 +33,18 @@ export type MapCommand =
       }
     }
   | { name: 'remove_layer'; input: { id?: string; label?: string; all?: boolean } }
+  | {
+      name: 'show_forecast'
+      input: {
+        unit?: string
+        granularity?: string
+        target?: string
+        horizon_years?: number
+      }
+    }
 
 /** Names the assistant may emit as map commands. */
-const MAP_COMMAND_NAMES = ['highlight_map', 'zoom_to', 'add_layer', 'remove_layer']
+const MAP_COMMAND_NAMES = ['highlight_map', 'zoom_to', 'add_layer', 'remove_layer', 'show_forecast']
 
 export interface ChatCallbacks {
   /** Incremental assistant prose. Append to the in-progress message. */

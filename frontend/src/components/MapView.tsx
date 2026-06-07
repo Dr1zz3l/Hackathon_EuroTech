@@ -869,7 +869,9 @@ export default function MapView({
 
     const heatEntries: { layer: L.Layer; opacity: number }[] = []
 
-    for (const spec of specs) {
+    // specs are ordered top→bottom (index 0 = top of the panel). Add them
+    // bottom-first so the top layer paints last and stacks above the rest.
+    for (const spec of [...specs].reverse()) {
       if (!spec.visible) continue
       const fc = spec.granularity === 'neighbourhood' ? nbhdGeojson : geojson
       if (!fc) continue
