@@ -489,9 +489,7 @@ export default function MapView({
           && (adjacency[selectedDistrict.name] ?? []).includes(d.name)
 
         let fillColor: string
-        if (useScoreRamp) {
-          fillColor = scoreColour(scoreMap.current.get(d.name)?.score ?? 0)
-        } else if (mapMode === 'future' && allocationResult) {
+        if (allocationResult) {
           const a = allocationResult.byDistrict.get(d.name)
           fillColor = a ? dominantLandColourFromUse(a.future) : dominantLandColour(d)
         } else {
@@ -539,9 +537,7 @@ export default function MapView({
       onEachFeature: (feature, lyr) => {
         const d = feature.properties as District
         const displayName = locale === 'yue' ? d.name_tc : d.name
-        const alloc = (!useScoreRamp && mapMode === 'future' && allocationResult)
-          ? allocationResult.byDistrict.get(d.name)
-          : undefined
+        const alloc = allocationResult?.byDistrict.get(d.name)
 
         lyr.bindTooltip(buildTooltipContent(displayName, alloc), {
           permanent: false,
@@ -555,7 +551,7 @@ export default function MapView({
           mouseover: (e) => {
             const l = e.target as L.Path
             const hoverStyle: L.PathOptions = { fillOpacity: 0.85 * districtsOpacity, weight: 2 }
-            if (!useScoreRamp && mapMode === 'future' && allocationResult) {
+            if (allocationResult) {
               const a = allocationResult.byDistrict.get(d.name)
               if (a) hoverStyle.fillColor = dominantLandColourFromUse(a.future)
             }
@@ -567,10 +563,11 @@ export default function MapView({
             const l = e.target as L.Path
             const sel = d.name === selectedDistrict?.name
               || d.name === selectedDistrict?.parent_district
+            const baseAlloc = allocationResult?.byDistrict.get(d.name)
             const baseStyle: L.PathOptions = {
               fillOpacity: (sel ? 0.88 : 0.7) * districtsOpacity,
               weight: sel ? 2.5 : 1.25,
-              fillColor: dominantLandColour(d),
+              fillColor: baseAlloc ? dominantLandColourFromUse(baseAlloc.future) : dominantLandColour(d),
             }
             // Keep the selected outline on top after the hover ends.
             l.setStyle(baseStyle)
@@ -624,8 +621,6 @@ export default function MapView({
       nbhdLayerRef.current = null
     }
 
-    const useScoreRamp = paletteMode === 'scenario' && activeScenario != null && mapMode === 'viability'
-
     const layer = L.geoJSON(nbhdGeojson as unknown as GeoJSON.GeoJsonObject, {
       pane: 'nbhdPane',
       style: (feature) => {
@@ -633,9 +628,7 @@ export default function MapView({
         const isSelected = d.name === selectedDistrict?.name
 
         let fillColor: string
-        if (useScoreRamp) {
-          fillColor = scoreColour(nbhdScoreMap.current.get(d.name)?.score ?? 0)
-        } else if (mapMode === 'future' && nbhdAllocationResult) {
+        if (nbhdAllocationResult) {
           const a = nbhdAllocationResult.byDistrict.get(d.name)
           fillColor = a ? dominantLandColourFromUse(a.future) : dominantLandColour(d)
         } else {
@@ -674,9 +667,7 @@ export default function MapView({
       onEachFeature: (feature, lyr) => {
         const d = feature.properties as District
         const displayName = locale === 'yue' ? d.name_tc : d.name
-        const alloc = (!useScoreRamp && mapMode === 'future' && nbhdAllocationResult)
-          ? nbhdAllocationResult.byDistrict.get(d.name)
-          : undefined
+        const alloc = nbhdAllocationResult?.byDistrict.get(d.name)
 
         lyr.bindTooltip(buildTooltipContent(displayName, alloc), {
           permanent: false,
@@ -690,7 +681,7 @@ export default function MapView({
           mouseover: (e) => {
             const l = e.target as L.Path
             const hoverStyle: L.PathOptions = { fillOpacity: 0.88 * districtsOpacity, weight: 1.5 }
-            if (!useScoreRamp && mapMode === 'future' && nbhdAllocationResult) {
+            if (nbhdAllocationResult) {
               const a = nbhdAllocationResult.byDistrict.get(d.name)
               if (a) hoverStyle.fillColor = dominantLandColourFromUse(a.future)
             }
@@ -701,10 +692,11 @@ export default function MapView({
           mouseout: (e) => {
             const l = e.target as L.Path
             const sel = d.name === selectedDistrict?.name
+            const nbhdBaseAlloc = nbhdAllocationResult?.byDistrict.get(d.name)
             const baseStyle: L.PathOptions = {
               fillOpacity: (sel ? 0.90 : 0.72) * districtsOpacity,
               weight: sel ? 2.5 : 0.75,
-              fillColor: dominantLandColour(d),
+              fillColor: nbhdBaseAlloc ? dominantLandColourFromUse(nbhdBaseAlloc.future) : dominantLandColour(d),
             }
             // Keep the selected outline on top after the hover ends.
             l.setStyle(baseStyle)
